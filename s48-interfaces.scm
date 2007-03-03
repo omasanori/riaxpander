@@ -125,7 +125,6 @@
     disclose-syntactic-environment
     for-each-syntactic-binding
     bind-variable!
-    reserve-name!
     name=?
 
     local-variable-classifier
@@ -184,11 +183,6 @@
     make-free-variable
     free-variable?
     free-variable/name
-
-    <reserved>
-    make-reserved
-    reserved?
-    reserved/name
     ))
 
 (define-interface syntactic-names-interface
