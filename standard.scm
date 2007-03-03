@@ -534,7 +534,7 @@
          (lambda (form rename compare)
            (call-with-syntax-error-procedure
              (lambda (syntax-error)
-               `(,(rename 'LET) ((,(rename 'KEY) (cadr form)))
+               `(,(rename 'LET) ((,(rename 'KEY) ,(cadr form)))
                   ,(let recur ((selector cddr-selector)
                                (clauses (cddr form)))
                      (let ((clause (car clauses))
