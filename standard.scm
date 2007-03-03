@@ -453,21 +453,28 @@
      (define-transformer
          '(DO (* (@ "DO variable clause" (NAME EXPRESSION ? EXPRESSION)))
               (@ "DO return clause" (EXPRESSION ? EXPRESSION))
-            + FORM)
+            * FORM)
        (lambda (form rename compare)
          (let ((bindings (cadr form))
                (condition (car (caddr form)))
                (result (cdr (caddr form)))
                (body (cdddr form)))
-           `(,(rename 'LET) ,(rename 'DO-LOOP)
-                ,(map (lambda (binding)
-                        `(,(car binding) ,(cadr binding)))
-                      bindings)
-              (,(rename 'IF) ,condition
-                (,(rename 'IF) #F #F ,@result)
-                (,(rename 'BEGIN)
-                  ,@body
-                  (,(rename 'DO-LOOP) ,@(map caddr bindings)))))))
+           (let ((loop-variables
+                  (map (lambda (binding)
+                         `(,(car binding) ,(cadr binding)))
+                       bindings))
+                 (loop-updates
+                  (map (lambda (binding)
+                         (if (null? (cddr binding))
+                             (car binding)
+                             (caddr binding)))
+                       bindings)))
+             `(,(rename 'LET) ,(rename 'DO-LOOP) (,@loop-variables)
+                (,(rename 'IF) ,condition
+                  (,(rename 'IF) #F #F ,@result)
+                  (,(rename 'BEGIN)
+                    ,@body
+                    (,(rename 'DO-LOOP) ,@loop-updates)))))))
        '(BEGIN IF LET))
 
      ;;; This supports the SRFI 61 extension to `=>' clauses.
