@@ -207,6 +207,10 @@
     history/parent-history
     history/current-reduction
     history/original-reduction
+    history/current-form
+    history/current-environment
+    history/original-form
+    history/original-environment
     history/add-reduction
     history/replace-reduction
     history/add-subform
