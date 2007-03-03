@@ -218,9 +218,10 @@
     reduction/environment
 
     make-top-level-history
-    null-history?
+    top-level-history?
     history/reductions
-    history/parent
+    history/parent-selector
+    history/parent-history
     history/current-reduction
     history/original-reduction
     history/add-reduction
