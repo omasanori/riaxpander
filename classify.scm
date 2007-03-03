@@ -404,7 +404,6 @@
               (lambda ()
                 (classify-subform selector form environment history))))
     (receive (classification history) (classifier)
-      history                           ;ignore
       (cond ((keyword? classification)
              (keyword-binding environment name classification))
             ((coerce-expression classification environment history)
