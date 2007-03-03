@@ -81,25 +81,11 @@
     (lambda (alias)
       (list (name->symbol alias)))))
 
-(set-record-type-unparser-method! <free-variable>
+(set-record-type-unparser-method! <variable>
   (simple-unparser-method 'VARIABLE
     (lambda (variable)
-      (list 'FREE
-            (name->symbol (free-variable/name variable))))))
-
-(set-record-type-unparser-method! <top-level-variable>
-  (simple-unparser-method 'VARIABLE
-    (lambda (variable)
-      (list 'TOP-LEVEL
-            (name->symbol (top-level-variable/name variable))
-            (top-level-variable/location variable)))))
-
-(set-record-type-unparser-method! <local-variable>
-  (simple-unparser-method 'VARIABLE
-    (lambda (variable)
-      (list 'LOCAL
-            (name->symbol (local-variable/name variable))
-            (name->symbol (local-variable/rename variable))))))
+      (list (variable/name variable)
+            (variable/location variable)))))
 
 (set-record-type-unparser-method! <syntactic-environment>
   (simple-unparser-method 'SYNTACTIC-ENVIRONMENT
