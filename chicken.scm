@@ -39,7 +39,7 @@
                           environment
                           (make-top-level-history forms environment))))))
 
-(define (install-expander)
+(define (exrename:install)
   (set! ##sys#compiler-toplevel-macroexpand-hook exrename:expand)
   (set! ##sys#interpreter-toplevel-macroexpand-hook exrename:expand)
   (set! macroexpand
