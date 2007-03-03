@@ -125,20 +125,11 @@
         (list 'TRANSFORMER
               (transformer/procedure transformer)
               (transformer/source transformer))))
-    (define-record-discloser <free-variable>
+    (define-record-discloser <variable>
       (lambda (variable)
-        (list 'VARIABLE '(FREE)
-              (free-variable/name variable))))
-    (define-record-discloser <top-level-variable>
-      (lambda (variable)
-        (list 'VARIABLE '(TOP-LEVEL)
-              (top-level-variable/name variable)
-              (top-level-variable/location variable))))
-    (define-record-discloser <local-variable>
-      (lambda (variable)
-        (list 'VARIABLE '(LOCAL)
-              (local-variable/name variable)
-              (local-variable/rename variable))))))
+        (list 'VARIABLE
+              (variable/name variable)
+              (variable/location variable))))))
 
 (define-structure syntactic-names syntactic-names-interface
   (open scheme
