@@ -138,10 +138,7 @@
       (lambda (variable)
         (list 'VARIABLE '(LOCAL)
               (local-variable/name variable)
-              (local-variable/rename variable))))
-    (define-record-discloser <reserved>
-      (lambda (reserved)
-        (list 'RESERVED (reserved/name reserved))))))
+              (local-variable/rename variable))))))
 
 (define-structure syntactic-names syntactic-names-interface
   (open scheme
