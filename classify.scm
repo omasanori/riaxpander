@@ -183,8 +183,9 @@
 ;;; Expressions require special handling, because we cannot simply
 ;;; view something as an expression later on (with some dispatch in a
 ;;; COMPILE-EXPRESSION procedure): we may need to continue
-;;; classification if the expression is actually a sequence.  So we
-;;; turn sequences into expressions right here.
+;;; classification if the expression is actually a sequence, but
+;;; classification requires an environment, which is not stored in
+;;; sequences.  So we turn sequences into expressions right here.
 
 (define (classify-expression form environment history)
   (let loop ((classifier (lambda () (classify form environment history))))
@@ -303,10 +304,10 @@
 ;;;;; The Horror of Internal Definitions
 
 ;;; This code might perhaps be improved by multi-continuation
-;;; procedure calls.  At least, there is not a single lambda
-;;; expression in the following pages that should require a heap
-;;; closure, but there is also not a single Scheme compiler out there
-;;; short of Stalin that is capable of concluding this.  What a pity.
+;;; procedure calls.  There is not a single lambda expression in the
+;;; following pages that should require a heap closure, but there is
+;;; also not a single Scheme compiler out there short of Stalin that
+;;; is capable of concluding this.  What a pity.
 
 (define (scan-body selector forms environment history)
   (let loop ((selector selector) (forms forms) (bindings '()))
