@@ -58,7 +58,7 @@
   (map chicken/compile-expression expressions))
 
 (define (chicken/compile-binding binding)
-  `(DEFINE ,(name->symbol (local-variable/rename (binding/variable binding)))
+  `(DEFINE ,(name->symbol (variable/location (binding/variable binding)))
      ,(chicken/compile-expression (binding/expression binding))))
 
 (define (chicken/self-evaluating? datum)
@@ -94,7 +94,6 @@
                                 (alias/name name)))
              (else #f)))
      (lambda (environment name denotation) ;bind!
-       ;++ Promote local variables to top-level variables here.
        (set-global-bindings! environment
                              (cons (cons name denotation)
                                    (global-bindings environment))))
@@ -114,9 +113,7 @@
 
 (define chicken/syntactic-parameters
   (lambda (key)
-    (cond ((eq? key local-variable-classifier) chicken/classify-local-variable)
-          ((eq? key top-level-variable-classifier)
-           chicken/classify-top-level-variable)
+    (cond ((eq? key variable-classifier) chicken/classify-variable)
           ((eq? key free-variable-classifier) chicken/classify-free-variable)
           ((eq? key datum-classifier) chicken/classify-datum)
           ((eq? key self-evaluating?) chicken/self-evaluating?)
@@ -136,18 +133,15 @@
           history))
 
 (define (chicken/classify-free-variable name environment history)
-  environment history                   ;ignore
-  (chicken/make-variable-location name))
+  history                               ;ignore
+  (chicken/make-variable-location name environment))
 
-(define (chicken/classify-top-level-variable name location environment history)
-  location environment history          ;ignore
-  (chicken/make-variable-location name))
+(define (chicken/classify-variable name location environment history)
+  name history                          ;ignore
+  (chicken/make-variable-location location environment))
 
-(define (chicken/classify-local-variable name rename environment history)
-  name environment history              ;ignore
-  (chicken/make-variable-location rename))
-
-(define (chicken/make-variable-location name)
+(define (chicken/make-variable-location name environment)
+  environment                           ;ignore
   (make-location (lambda () (name->symbol name))
                  (lambda (expression assignment-history)
                    assignment-history   ;ignore
@@ -221,7 +215,7 @@
   (lambda ()
     `(LAMBDA ,(chicken/%map-lambda-bvl bvl
                 (lambda (variable)
-                  (name->symbol (local-variable/rename variable))))
+                  (name->symbol (variable/location variable))))
        ,@(chicken/compile-lambda-body body environment))))
 
 (define (chicken/compile-lambda-body body environment)
