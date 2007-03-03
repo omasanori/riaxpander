@@ -7,6 +7,10 @@
 ;;; This code is written by Taylor R. Campbell and placed in the Public
 ;;; Domain.  All warranties are disclaimed.
 
+;;; This system requires that Chicken be set into case-insensitive
+;;; mode.  To load the system, simply (compile and) load this file.
+
+(use srfi-1)                            ;list-lib
 (include "history")
 (include "name")
 (include "denotation")
