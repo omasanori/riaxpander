@@ -53,6 +53,7 @@
         (continuation (hook/reclassify form history))))))
 
 (define (hook/reclassify form history)
+  form history                          ;ignore
   (error "Classifier not yet available."))
 
 (with-working-directory-pathname
