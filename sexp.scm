@@ -55,8 +55,7 @@
              ((alias? name)
               (syntactic-lookup (alias/environment name)
                                 (alias/name name)))
-             (else
-              (make-free-variable name))))
+             (else #f)))
      (lambda (environment name denotation) ;bind!
        (set-global-bindings! environment
                              (cons (cons name denotation)
