@@ -24,11 +24,13 @@
   (make-history (list (make-reduction initial-form environment))
                 '()))
 
-(define (null-history? history)
-  (not (pair? history)))
+(define (top-level-history? history)
+  (not (pair? (cdr history))))
 
 (define (history/reductions history) (car history))
 (define (history/parent history) (cdr history))
+(define (history/parent-selector history) (car (history/parent history)))
+(define (history/parent-history history) (cdr (history/parent history)))
 
 (define (history/current-reduction history)
   (car (history/reductions history)))
