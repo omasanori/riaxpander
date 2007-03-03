@@ -127,8 +127,7 @@
     bind-variable!
     name=?
 
-    local-variable-classifier
-    top-level-variable-classifier
+    variable-classifier
     free-variable-classifier
     datum-classifier
     combination-classifier
@@ -167,22 +166,11 @@
     transformer/procedure
     transformer/source
 
-    <top-level-variable>
-    make-top-level-variable
-    top-level-variable?
-    top-level-variable/name
-    top-level-variable/location
-
-    <local-variable>
-    make-local-variable
-    local-variable?
-    local-variable/name
-    local-variable/rename
-
-    <free-variable>
-    make-free-variable
-    free-variable?
-    free-variable/name
+    <variable>
+    make-variable
+    variable?
+    variable/name
+    variable/location
     ))
 
 (define-interface syntactic-names-interface
