@@ -9,7 +9,7 @@
 ;;; A history is a chain of lists of reductions, interleaved with
 ;;; subform selectors indicating what subform of one list of reductions
 ;;; the next list of reductions was.
-
+
 (define (make-reduction form environment)
   (cons form environment))
 
@@ -37,6 +37,18 @@
 
 (define (history/original-reduction history)
   (last (history/reductions history)))
+
+(define (history/current-form history)
+  (reduction/form (history/current-reduction history)))
+
+(define (history/current-environment history)
+  (reduction/environment (history/current-reduction history)))
+
+(define (history/original-form history)
+  (reduction/form (history/original-reduction history)))
+
+(define (history/original-environment history)
+  (reduction/environment (history/original-reduction history)))
 
 (define (history/update-reductions history procedure)
   (and history
