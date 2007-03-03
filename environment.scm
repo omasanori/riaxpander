@@ -89,9 +89,6 @@
     (syntactic-bind! environment name variable)
     variable))
 
-(define (reserve-name! name environment)
-  (syntactic-bind! environment name (make-reserved name)))
-
 (define (name=? environment-a name-a environment-b name-b)
   (let ((denotation-a (syntactic-lookup environment-a name-a))
         (denotation-b (syntactic-lookup environment-b name-b)))
@@ -227,11 +224,10 @@
               (syntactic-lookup (syntactic-environment/parent environment)
                                 name))))
      (lambda (environment name denotation) ;bind!
+       ;++ This should report more useful (and restartable) errors.
        (cond ((assq name (local-bindings environment))
               => (lambda (probe)
-                   (if (reserved? (cdr probe))
-                       (set-cdr! probe denotation)
-                       (error "Rebinding name:" environment name denotation))))
+                   (error "Rebinding name:" environment name denotation)))
              (else
               (set-local-bindings! environment
                                    (cons (cons name denotation)

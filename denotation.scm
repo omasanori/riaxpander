@@ -37,11 +37,6 @@
     free-variable?
   (name free-variable/name))
 
-(define-record-type <reserved>
-    (make-reserved name)
-    reserved?
-  (name reserved/name))
-
 (define (denotation=? denotation-a denotation-b)
   (or (eq? denotation-a denotation-b)
       (and (top-level-variable? denotation-a)

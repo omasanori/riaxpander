@@ -51,11 +51,6 @@
                     ((or (classifier? denotation)
                          (transformer? denotation))
                      (values (make-keyword name denotation) history))
-                    ((reserved? denotation)
-                     (classify-error "Premature reference to reserved name:"
-                                     history
-                                     name
-                                     (reserved/name denotation)))
                     (else
                      (error "Invalid denotation:" denotation
                             name environment history)))))
@@ -338,7 +333,6 @@
      (lambda (definitions)
        (if-definitions
         (append-map (lambda (definition)
-                      (reserve-name! (definition/name definition) environment)
                       (process-definition definition environment))
                     definitions)))
      if-expressions)))
