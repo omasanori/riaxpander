@@ -19,7 +19,6 @@
 (include "taxonomy")
 (include "classify")
 (include "standard")
-(include "sexp")
 
 (define (exrename:expand form)
   (set! *alias-uid* 0)
