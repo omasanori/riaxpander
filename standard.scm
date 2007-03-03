@@ -312,8 +312,9 @@
 (define (define-syntax-definer define-classifier)
   (define-classifier '(DEFINE-SYNTAX NAME FORM)
     (lambda (form environment history)
-      (make-definition keyword-binder
-                       cadr-selector caddr-selector form history))))
+      (values (make-definition keyword-binder
+                               cadr-selector caddr-selector form history)
+              history))))
 
 (define (standard-syntactic-binding-macrology)
   (make-extended-macrology
