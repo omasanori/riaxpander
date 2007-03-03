@@ -175,7 +175,7 @@
 
 (define (chicken/compile-combination operator operands history)
   (let ((input-form
-         (and history (reduction/form (history/current-reduction history))))
+         (and history (reduction/form (history/original-reduction history))))
         (output-form `(,operator ,@operands)))
     (chicken/clobber-source-record input-form output-form)
     output-form))
