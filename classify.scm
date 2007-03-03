@@ -45,9 +45,13 @@
 (define (classify-name name environment history)
   (cond ((syntactic-lookup environment name)
          => (lambda (denotation)
-              (cond ((classify-variable denotation environment history)
-                     => (lambda (classification)
-                          (values classification history)))
+              (cond ((variable? denotation)
+                     (values ((variable-classifier environment)
+                              (variable/name denotation)
+                              (variable/location denotation)
+                              environment
+                              history)
+                             history))
                     ((or (classifier? denotation)
                          (transformer? denotation))
                      (values (make-keyword name denotation) history))
@@ -55,8 +59,9 @@
                      (error "Invalid denotation:" denotation
                             name environment history)))))
         (else
-         (values ((free-variable-classifier environment) name history)
-                 history))))
+         (values
+          ((free-variable-classifier environment) name environment history)
+          history))))
 
 (define (classify/keyword keyword form environment history)
   (let ((name (keyword/name keyword))
@@ -88,28 +93,6 @@
                             history)
    environment
    history))
-
-(define (classify-variable variable environment history)
-  (cond ((local-variable? variable)
-         ((local-variable-classifier environment)
-          (local-variable/name variable)
-          (local-variable/rename variable)
-          environment
-          history))
-        ((top-level-variable? variable)
-         ((top-level-variable-classifier environment)
-          (top-level-variable/name variable)
-          (top-level-variable/location variable)
-          environment
-          history))
-        ((free-variable? variable)
-         ((free-variable-classifier environment)
-          (free-variable/name variable)
-          environment
-          history))
-        (else #f)))
-
-;;;; Classification Utilities
 
 (define (classify-subform selector form environment history)
   (classify-subform* classify selector form environment history))

@@ -84,8 +84,7 @@
            => walk))))
 
 (define (bind-variable! name environment)
-  (let ((variable
-         (make-local-variable name (syntactic-alias environment name))))
+  (let ((variable (make-variable name (syntactic-alias environment name))))
     (syntactic-bind! environment name variable)
     variable))
 
@@ -114,11 +113,8 @@
 ;;; nested binding forms, then, pose no problem for the performance of
 ;;; these procedures.
 
-(define (local-variable-classifier environment)
-  (syntactic-parameter environment local-variable-classifier))
-
-(define (top-level-variable-classifier environment)
-  (syntactic-parameter environment top-level-variable-classifier))
+(define (variable-classifier environment)
+  (syntactic-parameter environment variable-classifier))
 
 (define (free-variable-classifier environment)
   (syntactic-parameter environment free-variable-classifier))

@@ -20,30 +20,15 @@
   (procedure transformer/procedure)
   (source transformer/source))
 
-(define-record-type <top-level-variable>
-    (make-top-level-variable name location)
-    top-level-variable?
-  (name top-level-variable/name)
-  (location top-level-variable/location))
-
-(define-record-type <local-variable>
-    (make-local-variable name rename)
-    local-variable?
-  (name local-variable/name)
-  (rename local-variable/rename))
-
-(define-record-type <free-variable>
-    (make-free-variable name)
-    free-variable?
-  (name free-variable/name))
+(define-record-type <variable>
+    (make-variable name location)
+    variable?
+  (name variable/name)
+  (location variable/location))
 
 (define (denotation=? denotation-a denotation-b)
   (or (eq? denotation-a denotation-b)
-      (and (top-level-variable? denotation-a)
-           (top-level-variable? denotation-b)
-           (eq? (top-level-variable/location denotation-a)
-                (top-level-variable/location denotation-b)))
-      (and (free-variable? denotation-a)
-           (free-variable? denotation-b)
-           (eq? (free-variable/name denotation-a)
-                (free-variable/name denotation-b)))))
+      (and (variable? denotation-a)
+           (variable? denotation-b)
+           (eq? (variable/location denotation-a)
+                (variable/location denotation-b)))))
