@@ -28,6 +28,7 @@
 (define-interface syntactic-classifier-interface
   (export
     classify
+    reclassify
     classify-reduction
     classify-subform
     classify-subform*
