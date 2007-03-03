@@ -76,9 +76,7 @@
 
 (define sexp/syntactic-parameters
   (lambda (key)
-    (cond ((eq? key local-variable-classifier) sexp/classify-local-variable)
-          ((eq? key top-level-variable-classifier)
-           sexp/classify-top-level-variable)
+    (cond ((eq? key variable-classifier) sexp/classify-variable)
           ((eq? key free-variable-classifier) sexp/classify-free-variable)
           ((eq? key datum-classifier) sexp/classify-datum)
           ((eq? key self-evaluating?) sexp/self-evaluating?)
@@ -107,19 +105,15 @@
       (number? datum)
       (string? datum)))
 
+(define (sexp/classify-variable name location environment history)
+  name history                          ;ignore
+  (sexp/make-variable-location location environment))
+
 (define (sexp/classify-free-variable name environment history)
-  environment history                   ;ignore
-  (sexp/make-variable-location name))
+  history                               ;ignore
+  (sexp/make-variable-location name environment))
 
-(define (sexp/classify-local-variable name rename environment history)
-  name environment history              ;ignore
-  (sexp/make-variable-location rename))
-
-(define (sexp/classify-top-level-variable name location environment history)
-  location environment history          ;ignore
-  (sexp/make-variable-location name))
-
-(define (sexp/make-variable-location name)
+(define (sexp/make-variable-location name environment)
   (make-location (lambda ()
                    name)
                  (lambda (expression history)
@@ -141,7 +135,7 @@
   (map sexp/compile-expression expressions))
 
 (define (sexp/compile-binding binding)
-  `(DEFINE ,(local-variable/rename (binding/variable binding))
+  `(DEFINE ,(variable/location (binding/variable binding))
      ,(sexp/compile-expression (binding/expression binding))))
 
 (define (sexp/compile-combination operator operands history)
@@ -203,7 +197,7 @@
 
 (define (sexp/lambda-compiler bvl body environment history)
   (lambda ()
-    `(LAMBDA ,(sexp/%map-lambda-bvl bvl local-variable/rename)
+    `(LAMBDA ,(sexp/%map-lambda-bvl bvl variable/location)
        ,@(sexp/compile-lambda-body body environment))))
 
 (define (sexp/compile-lambda-body body environment)
