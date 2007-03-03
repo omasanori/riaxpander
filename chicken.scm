@@ -92,8 +92,7 @@
              ((alias? name)
               (syntactic-lookup (alias/environment name)
                                 (alias/name name)))
-             (else
-              (make-free-variable name))))
+             (else #f)))
      (lambda (environment name denotation) ;bind!
        ;++ Promote local variables to top-level variables here.
        (set-global-bindings! environment
