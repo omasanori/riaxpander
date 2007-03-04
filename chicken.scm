@@ -62,8 +62,11 @@
      ,(chicken/compile-expression (binding/expression binding))))
 
 (define (chicken/self-evaluating? datum)
-  (not (or (pair? datum)
-           (name? datum))))
+  (or (boolean? datum)
+      (char? datum)
+      (number? datum)
+      (string? datum)
+      (eof-object? datum)))
 
 (define (make-chicken-environment)
   (let ((environment
