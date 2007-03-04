@@ -35,18 +35,22 @@
                 ((expression? item) (chicken/compile-expression item))
                 (else (error "Invalid top-level item:" item))))
         (let ((forms (list form))
-              (environment (make-chicken-environment)))
+              (environment
+               (or exrename:top-level-environment (make-chicken-environment))))
           (scan-top-level identity-selector
                           forms
                           environment
                           (make-top-level-history forms environment))))))
 
+(define exrename:top-level-environment #f)
+
 (define (exrename:install)
+  (set! exrename:top-level-environment (make-chicken-environment))
   (set! ##sys#compiler-toplevel-macroexpand-hook exrename:expand)
   (set! ##sys#interpreter-toplevel-macroexpand-hook exrename:expand)
   (set! macroexpand
-        (lambda (expression . me)
-          me                            ;ignore -- what is this?
+        (lambda (expression . macro-environment)
+          macro-environment             ;ignore -- Chicken unhygienic macros
           (exrename:expand expression))))
 
 (define (chicken/meta-evaluate expression environment)
