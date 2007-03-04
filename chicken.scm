@@ -81,45 +81,55 @@
                          (disclose-syntactic-environment environment)
                          output-port))
 
-(define (define-record-component-printer type name . component-accessors)
-  (define-record-printer (type record output-port)
+(define (printer-with-components name . component-accessors)
+  (lambda (record output-port)
     (print-with-components name
                            (map (lambda (component-accessor)
                                   (component-accessor record))
                                 component-accessors)
                            output-port)))
 
-(define-record-component-printer <alias> 'ALIAS
-  alias/name
-  alias/uid)
+(define-record-printer <alias>
+  (printer-with-components 'ALIAS
+                           alias/name
+                           alias/uid))
 
-(define-record-component-printer <classifier> 'CLASSIFIER
-  classifier/name)
+(define-record-printer <classifier>
+  (printer-with-components 'CLASSIFIER
+                           classifier/name))
 
-(define-record-component-printer <transformer> 'TRANSFORMER)
+(define-record-printer <transformer>
+  (printer-with-components 'TRANSFORMER))
 
-(define-record-component-printer <variable> 'VARIABLE
-  variable/name
-  variable/location)
+(define-record-printer <variable>
+  (printer-with-components 'VARIABLE
+                           variable/name
+                           variable/location))
 
-(define-record-component-printer <keyword> 'KEYWORD
-  keyword/name)
+(define-record-printer <keyword>
+  (printer-with-components 'KEYWORD
+                           keyword/name))
 
 ;++ Should these actually compile the data?  The output might be more readable.
 
-(define-record-component-printer <expression> 'EXPRESSION
-  expression/compiler)
+(define-record-printer <expression>
+  (printer-with-components 'EXPRESSION
+                           expression/compiler))
 
-(define-record-component-printer <location> 'LOCATION
-  location/expression-compiler)
+(define-record-printer <location>
+  (printer-with-components 'LOCATION
+                           location/expression-compiler))
 
-(define-record-component-printer <sequence> 'SEQUENCE
-  sequence/forms)
+(define-record-printer <sequence>
+  (printer-with-components 'SEQUENCE
+                           sequence/forms))
 
-(define-record-component-printer <definition> 'DEFINITION)
+(define-record-printer <definition>
+  (printer-with-components 'DEFINITION))
 
-(define-record-component-printer <binding> 'BINDING
-  binding/variable)
+(define-record-printer <binding>
+  (printer-with-components 'BINDING
+                           binding/variable))
 
 (define (make-chicken-environment)
   (let ((environment
