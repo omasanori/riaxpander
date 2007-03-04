@@ -10,6 +10,8 @@
 ;;; This system requires that Chicken be set into case-insensitive
 ;;; mode.  To load the system, simply (compile and) load this file.
 
+(define classify-error syntax-error)
+
 (use srfi-1)                            ;list-lib
 (include "history")
 (include "name")
