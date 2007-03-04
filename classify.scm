@@ -109,6 +109,8 @@
              (lambda ()
                (classify-error error-message history classification))))))))
 
+;;;; Classification Utilities
+
 ;;; We could simplify this page with macros, if we allowed ourselves
 ;;; to use macros.
 
@@ -151,6 +153,61 @@
 
 (define (classify-subkeywords selector forms environment history)
   (classify-subforms* classify-keyword selector forms environment history))
+
+;;;; Temporary Classifiers
+
+;;; These must be extremely careful only to generate aliases for
+;;; syntactic bindings, never for variables!  They must be gone in the
+;;; expander's output, because we have no way to find them after the
+;;; expander is finished, since these keywords are entirely anonymous.
+
+(define (keyword-denotation->operator denotation)
+  (generate-alias 'KEYWORD
+                  (let ((environment
+                         (syntactic-extend (null-syntactic-environment #f))))
+                    (syntactic-bind! environment 'KEYWORD denotation)
+                    environment)
+                  #f))                  ;** No introducer to record
+
+(define (classifier->operator procedure)
+  (keyword-denotation->operator (make-classifier #f procedure)))
+
+(define (classifier->form procedure)
+  `(,(classifier->operator procedure)))
+
+(define (transformer->operator environment auxiliary-names procedure)
+  (keyword-denotation->operator
+   (make-transformer environment auxiliary-names procedure #f)))
+
+(define (transformer->form environment auxiliary-names procedure)
+  `(,(transformer->operator environment auxiliary-names procedure)))
+
+(define (call-with-syntactic-environment receiver)
+  (classifier->form
+   (lambda (form environment history)
+     form                               ;ignore
+     (classify-reduction (receiver environment) environment history))))
+
+(define (call-with-syntactic-history receiver)
+  (classifier->form
+   (lambda (form environment history)
+     form                               ;ignore
+     (classify-reduction (receiver history) environment history))))
+
+(define (call-with-syntax-error-procedure receiver)
+  (classifier->form
+   (lambda (form environment history)
+     form                               ;ignore
+     (classify-reduction
+      (receiver
+       (lambda (message selector form . irritants)
+         (apply syntax-error
+                message
+                (history/add-subform history selector form environment)
+                form
+                irritants)))
+      environment
+      history))))
 
 ;;;; Sequence Scanning
 
