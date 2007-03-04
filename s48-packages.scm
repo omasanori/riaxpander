@@ -42,14 +42,12 @@
         receiving
         syntactic-transformation
         syntactic-taxonomy
-        syntactic-denotations
         syntactic-environments
+        syntactic-denotations
         syntactic-names
         syntactic-history
         syntactic-errors
-        structure-refs
         )
-  (access syntactic-error-hooks)
   (optimize auto-integrate)
   (begin
     (define (append-reverse list tail)
@@ -62,6 +60,8 @@
                   (append-map procedure (cdr list)))
           '())))
   (files classify)
+  (access syntactic-error-hooks)
+  (open structure-refs)
   (begin
     ((structure-ref syntactic-error-hooks SET-RECLASSIFIER!)
      reclassify)))
@@ -78,7 +78,6 @@
 (define-structure syntactic-taxonomy syntactic-taxonomy-interface
   (open scheme
         srfi-9+                         ;define-record-type
-        syntactic-history
         )
   (optimize auto-integrate)
   (files taxonomy))

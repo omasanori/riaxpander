@@ -39,15 +39,15 @@
     classify-expression classify-subexpression  classify-subexpressions
     classify-location   classify-sublocation    classify-sublocations
     classify-keyword    classify-subkeyword     classify-subkeywords
-    coerce-expression
     classify-sequence
+    classify/sequence
     scan-expressions
     scan-definitions
     scan-top-level
     scan-body
-    variable-binder
-    keyword-binder
-    overloaded-binder
+    make-variable-definition
+    make-keyword-definition
+    make-overloaded-definition
     ))
 
 (define-interface syntactic-transformation-interface
@@ -73,32 +73,28 @@
     <location>
     make-location
     location?
+    location/expression-compiler
     location/assignment-compiler
 
     <sequence>
     make-sequence
     sequence?
     sequence/selector
-    sequence/subforms
-    sequence/form
+    sequence/forms
+    sequence/environment
     sequence/history
 
     <definition>
     make-definition
     definition?
-    definition/binder
-    definition/name-selector
-    definition/name
-    definition/subform-selector
-    definition/subform
-    definition/form
-    definition/history
+    definition/scanner
 
     <binding>
     make-binding
     binding?
     binding/variable
-    binding/expression
+    binding/environment
+    binding/classifier
     ))
 
 (define-interface syntactic-environments-interface
@@ -134,7 +130,6 @@
     combination-classifier
     self-evaluating?
     quotation-compiler
-    expression-sequence-compiler
     conditional-compiler
     lambda-bvl-mapper
     lambda-compiler
