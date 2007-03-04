@@ -131,9 +131,6 @@
 (define (quotation-compiler environment)
   (syntactic-parameter environment quotation-compiler))
 
-(define (expression-sequence-compiler environment)
-  (syntactic-parameter environment expression-sequence-compiler))
-
 (define (conditional-compiler environment)
   (syntactic-parameter environment conditional-compiler))
 
@@ -222,8 +219,9 @@
      (lambda (environment name denotation) ;bind!
        ;++ This should report more useful (and restartable) errors.
        (cond ((assq name (local-bindings environment))
-              => (lambda (probe)
-                   (error "Rebinding name:" environment name denotation)))
+              => (lambda (original-binding)
+                   (error "Rebinding name:" environment name denotation
+                          `(was ,(cdr original-binding)))))
              (else
               (set-local-bindings! environment
                                    (cons (cons name denotation)

@@ -29,8 +29,8 @@
 
 (define-record-type <expression>
     (make-expression compiler)
-    direct-expression?
-  (compiler direct-expression/compiler))
+    %expression?
+  (compiler expression/compiler))
 
 ;;; The names of the fields in locations are misleading.  The
 ;;; expression compiler is supplied by the client, and may be
@@ -46,13 +46,9 @@
   (assignment-compiler location/assignment-compiler))
 
 (define (expression? object)
-  (or (direct-expression? object)
-      (location? object)))
-
-(define (expression/compiler expression)
-  (if (direct-expression? expression)
-      (direct-expression/compiler expression)
-      (location/expression-compiler expression)))
+  (or (%expression? object)
+      (location? object)
+      (sequence? object)))
 
 ;;;; Sequences and Definitions
 
@@ -65,48 +61,42 @@
 ;;; until then either.
 
 (define-record-type <sequence>
-    (make-sequence selector form history)
+    (make-sequence selector forms environment history)
     sequence?
   (selector sequence/selector)
-  (form sequence/form)
+  (forms sequence/forms)
+  (environment sequence/environment)
   (history sequence/history))
 
-(define (sequence/subforms sequence)
-  (apply-selector (sequence/selector sequence) (sequence/form sequence)))
-
-;;; Definitions represent, well, definitions.  They subsume both
-;;; variable definitions and syntactic definitions; the distinction
-;;; between the two is specified by the binder, which is a procedure
-;;; that modifies an environment appropriately.
+;;; Definitions are an abstraction of anything that is not an
+;;; expression that could conceivably occur at the top level, and
+;;; anything that passes at the beginning of a lambda body as an
+;;; internal definition.  This may be syntax definitions (yes, we
+;;; support internal syntax definitions), declarations, &c.
+;;; `Scanning' a definition means installing any keyword bindings
+;;; (DEFINE-SYNTAX) or yielding any variable bindings (DEFINE; see
+;;; `bindings' in the sense below), and possibly examining the
+;;; right-hand side to determine whether it is a keyword or a variable
+;;; binding (for a hypothetical overloaded DEFINE that allows both --
+;;; see MAKE-OVERLOADED-DEFINITION in classify.scm).
 
 (define-record-type <definition>
-    (make-definition binder name-selector subform-selector form history)
+    (make-definition scanner)
     definition?
-  (binder definition/binder)
-  (name-selector definition/name-selector)
-  (subform-selector definition/subform-selector)
-  (form definition/form)
-  (history definition/history))
+  (scanner definition/scanner))
 
-(define (definition/name definition)
-  (apply-selector (definition/name-selector definition)
-                  (definition/form definition)))
-
-(define (definition/subform definition)
-  (apply-selector (definition/subform-selector definition)
-                  (definition/form definition)))
-
-;++ What about declarations?  I think they fall into a category
-;++ similar to definitions.
-
-;;; After a variable definition has been processed, it yields a fully
-;;; classified `binding' in the output.  This is a bit of a kludge,
-;;; but I don't have time to think of a better way to do this.
-;;; Actually, it shouldn't be fully classified anyway, to do check
-;;; internal definitions thoroughly.
+;;; Bindings are the result of scanning variable definitions.  They
+;;; contain the variable bound (not its name or location, but the
+;;; variable record itself) and a procedure to classify the right-hand
+;;; side expression.  This expression's classification is delayed so
+;;; that forward macro references work.
+;;;
+;;; Bindings also store a reference to the definition environment, so
+;;; that we can simplify the variable's name if desired.
 
 (define-record-type <binding>
-    (make-binding variable expression)
+    (make-binding variable environment classifier)
     binding?
   (variable binding/variable)
-  (expression binding/expression))
+  (environment binding/environment)
+  (classifier binding/classifier))

@@ -33,7 +33,9 @@
      (define (define-expression-compiler pattern procedure)
        (define-classifier pattern
          (lambda (form environment history)
-           (values (make-expression (procedure form environment history))
+           (values (make-expression
+                    (lambda ()
+                      (procedure form environment history)))
                    history))))
 
      (define (define-transformer pattern procedure auxiliary-names)
@@ -82,11 +84,10 @@
                 (pattern-error pattern)))
            ((? * +)
             (if (pair? (cdr pattern))
-                ((let ((repeat repeating-pattern))
-                   (case (car pattern)
-                     ((?) (repeat 0 1))
-                     ((*) (repeat 0 #f))
-                     ((+) (repeat 1 #f))))
+                ((case (car pattern)
+                   ((?) (repeating-pattern 0 1))
+                   ((*) (repeating-pattern 0 #f))
+                   ((+) (repeating-pattern 1 #f)))
                  (pattern-predicate (cadr pattern))
                  (pattern-predicate (cddr pattern)))
                 (pattern-error pattern)))
@@ -200,7 +201,7 @@
 
      (define-classifier '(BEGIN * FORM)
        (lambda (form environment history)
-         (values (make-sequence cdr-selector form history) history)))
+         (classify-sequence cdr-selector (cdr form) environment history)))
 
      (define-expression-compiler '(IF EXPRESSION EXPRESSION ? EXPRESSION)
        (lambda (form environment history)
@@ -249,7 +250,10 @@
            (syntactic-seal! environment*)
            ((lambda-compiler environment)
             bvl*
-            (make-sequence cddr-selector form history)
+            (make-sequence cddr-selector
+                           (cddr form)
+                           (syntactic-extend environment*)
+                           history)
             environment*
             history)))))))
 
@@ -258,7 +262,7 @@
    (lambda (define-classifier define-expression-compiler define-transformer)
      define-expression-compiler define-transformer ;ignore
      (define-variable-definer define-classifier standard-definition-pattern
-       variable-binder)
+       make-variable-definition)
      (define-syntax-definer define-classifier))))
 
 (define (curried-definition-macrology)
@@ -266,7 +270,7 @@
    (lambda (define-classifier define-expression-compiler define-transformer)
      define-expression-compiler define-transformer ;ignore
      (define-variable-definer define-classifier curried-definition-pattern
-       variable-binder)
+       make-variable-definition)
      (define-syntax-definer define-classifier))))
 
 (define (overloaded-definition-macrology)
@@ -274,20 +278,7 @@
    (lambda (define-classifier define-expression-compiler define-transformer)
      define-expression-compiler define-transformer ;ignore
      (define-variable-definer define-classifier curried-definition-pattern
-       overloaded-binder))))
-
-(define (reduce-definition form environment history primitive)
-  (if (name? (cadr form))
-      (values (primitive cadr-selector caddr-selector form) history)
-      (classify-reduction
-       (let ((define-keyword (car form))
-             (name (caadr form))
-             (bvl (cdadr form))
-             (body (cddr form)))
-         `(,define-keyword ,name
-            (,(generate-alias 'LAMBDA environment (car form)) ,bvl ,@body)))
-       environment
-       history)))
+       make-overloaded-definition))))
 
 (define standard-definition-pattern
   '(DEFINE . (OR (NAME EXPRESSION) ((NAME . BVL) + FORM))))
@@ -301,57 +292,96 @@
                . BVL))))
     `(DEFINE . (OR (NAME EXPRESSION) (,curried? + FORM)))))
 
-(define (define-variable-definer define-classifier pattern binder)
+(define (define-variable-definer define-classifier pattern make-definition)
   (define-classifier pattern
     (lambda (form environment history)
-      (reduce-definition form environment history
-        (lambda (name-selector subform-selector form)
-          (make-definition variable-binder
-                           name-selector subform-selector form history))))))
+      (if (name? (cadr form))
+          (values (make-definition cadr-selector (cadr form)
+                                   caddr-selector (caddr form)
+                                   environment history)
+                  history)
+          (classify-reduction
+           (let ((define-keyword (car form))
+                 (name (caadr form))
+                 (bvl (cdadr form))
+                 (body (cddr form)))
+             (let ((lambda-keyword      ;++ Better absolute reference...
+                    (generate-alias 'LAMBDA environment define-keyword)))
+               `(,define-keyword ,name (,lambda-keyword ,bvl ,@body))))
+           environment
+           history)))))
 
 (define (define-syntax-definer define-classifier)
   (define-classifier '(DEFINE-SYNTAX NAME FORM)
     (lambda (form environment history)
-      (values (make-definition keyword-binder
-                               cadr-selector caddr-selector form history)
+      (values (make-keyword-definition cadr-selector (cadr form)
+                                       caddr-selector (caddr form)
+                                       environment history)
               history))))
 
-(define (standard-syntactic-binding-macrology)
+(define (make-syntactic-binding-macrology classifier)
   (make-extended-macrology
    (lambda (define-classifier define-expression-compiler define-transformer)
+     define-expression-compiler define-transformer ;ignore
 
-     (define (local-syntax form environment closing-environment history)
-       (select-for-each cadr-selector (cadr form)
-         (lambda (selector binding)
-           (receive (keyword history)
-               (classify-subkeyword (select-car (select-cdr selector))
-                                    (cadr binding)
-                                    closing-environment
-                                    history)
-             history                    ;ignore
-             (syntactic-bind! environment
-                              (car binding)
-                              (keyword/denotation keyword)))))
-       (values (coerce-expression (make-sequence cddr-selector form history)
-                                  environment
-                                  history)
-               history))
+     (let ()
 
-     (define-classifier '(LET-SYNTAX (* (@ "LET-SYNTAX binding"
-                                           (NAME EXPRESSION)))
-                           + FORM)
-       (lambda (form environment history)
-         (local-syntax form
-                       (syntactic-extend environment)
-                       environment
-                       history)))
+       (define (local-syntax form environment closing-environment history)
+         (select-for-each cadr-selector (cadr form)
+           (lambda (selector binding)
+             (receive (keyword history)
+                 (classify-subkeyword (select-car (select-cdr selector))
+                                      (cadr binding)
+                                      closing-environment
+                                      history)
+               history                  ;ignore
+               (syntactic-bind! environment
+                                (car binding)
+                                (keyword/denotation keyword)))))
+         (classifier cddr-selector (cddr form) environment history (car form)))
 
-     (define-classifier '(LETREC-SYNTAX (* (@ "LETREC-SYNTAX binding"
-                                              (NAME EXPRESSION)))
-                           + FORM)
-       (lambda (form environment history)
-         (let ((environment (syntactic-extend environment)))
-           (local-syntax form environment environment history)))))))
+       (define-classifier '(LET-SYNTAX (* (@ "LET-SYNTAX binding"
+                                             (NAME EXPRESSION)))
+                             + FORM)
+         (lambda (form environment history)
+           (local-syntax form
+                         (syntactic-extend environment)
+                         environment
+                         history)))
+
+       (define-classifier '(LETREC-SYNTAX (* (@ "LETREC-SYNTAX binding"
+                                                (NAME EXPRESSION)))
+                             + FORM)
+         (lambda (form environment history)
+           (let ((environment (syntactic-extend environment)))
+             (local-syntax form environment environment history))))))))
+
+;;; Per R5RS, LET-SYNTAX and LETREC-SYNTAX always introduce a new
+;;; scope.  This means, though, that one can't do something along
+;;; these lines:
+;;;
+;;;   (let-syntax ((define-foo ...))
+;;;     (define-foo mumble)
+;;;     (define-foo grumble)),
+;;;
+;;; which is often a useful idiom, and which I believe Chez supports.
+;;; So we provide two options.
+
+(define (standard-syntactic-binding-macrology)
+  (make-syntactic-binding-macrology
+   (lambda (selector forms environment history keyword)
+     selector                           ;ignore
+     (classify-reduction
+      ;++ This should probably not generate a reference to LET.
+      `(,(generate-alias 'LET environment keyword) () ,@forms)
+      environment
+      history))))
+
+(define (non-standard-syntactic-binding-macrology)
+  (make-syntactic-binding-macrology
+   (lambda (selector forms environment history keyword)
+     keyword                            ;ignore
+     (classify-sequence selector forms environment history))))
 
 (define (standard-variable-binding-macrology)
   (make-standard-transformer-macrology
@@ -425,6 +455,7 @@
 
      (define (boolean-reduction null-case binary-case)
        (lambda (form rename compare)
+         compare                        ;ignore
          (let ((operands (cdr form)))
            (cond ((not (pair? operands))
                   (null-case rename))
@@ -436,7 +467,9 @@
                                `(,(car form) ,@(cdr operands))))))))
 
      (define-transformer '(OR * EXPRESSION)
-       (boolean-reduction (lambda (rename) '#F)
+       (boolean-reduction (lambda (rename)
+                            rename      ;ignore
+                            '#F)
                           (lambda (rename a b)
                             `(,(rename 'LET) ((,(rename 'T) ,a))
                                (,(rename 'IF) ,(rename 'T)
@@ -445,7 +478,9 @@
        '(LET IF))
 
      (define-transformer '(AND * EXPRESSION)
-       (boolean-reduction (lambda (rename) '#T)
+       (boolean-reduction (lambda (rename)
+                            rename      ;ignore
+                            '#T)
                           (lambda (rename a b)
                             `(,(rename 'IF) ,a ,b #F)))
        '(IF))
@@ -455,6 +490,7 @@
               (@ "DO return clause" (EXPRESSION ? EXPRESSION))
             * FORM)
        (lambda (form rename compare)
+         compare                        ;ignore
          (let ((bindings (cadr form))
                (condition (car (caddr form)))
                (result (cdr (caddr form)))
