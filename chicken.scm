@@ -30,10 +30,10 @@
          (car results)
          `(BEGIN ,@results)))
    (map (lambda (item)
-          (strip-syntax*
-           (cond ((binding? item) (chicken/compile-binding item))
-                 ((expression? item) (chicken/compile-expression item))
-                 (else (error "Invalid top-level item:" item)))))
+          (cond ((binding? item) (chicken/compile-binding item))
+                ((declaration? item) (chicken/compile-declaration item))
+                ((expression? item) (chicken/compile-expression item))
+                (else (error "Invalid top-level item:" item))))
         (let ((forms (list form))
               (environment (make-chicken-environment)))
           (scan-top-level identity-selector
@@ -53,22 +53,69 @@
   environment                           ;ignore
   ((##sys#eval-handler) expression))
 
-(define (chicken/compile-expression expression)
-  ((expression/compiler expression)))
+(define (chicken/reduce-name name environment)
+  (let loop ((name name))
+    (if (alias? name)
+        (if (name=? environment name environment (alias/name name))
+            (loop (alias/name name))
+            (name->symbol name))
+        name)))
+
+(define (print-with-components type components output-port)
+  ;; For some reason, the second argument to WRITE-STRING in Chicken is
+  ;; false or the length of the prefix to write.
+  (write-string "#<" #f output-port)
+  (display type output-port)
+  (for-each (lambda (component)
+              (write-char #\space output-port)
+              (write component output-port))
+            components)
+  (write-string ">" #f output-port))
 
-(define (chicken/compile-expressions expressions)
-  (map chicken/compile-expression expressions))
+(define-record-printer (<syntactic-environment> environment output-port)
+  (print-with-components 'SYNTACTIC-ENVIRONMENT
+                         (disclose-syntactic-environment environment)
+                         output-port))
 
-(define (chicken/compile-binding binding)
-  `(DEFINE ,(name->symbol (variable/location (binding/variable binding)))
-     ,(chicken/compile-expression (binding/expression binding))))
+(define (define-record-component-printer type name . component-accessors)
+  (define-record-printer (type record output-port)
+    (print-with-components name
+                           (map (lambda (component-accessor)
+                                  (component-accessor record))
+                                component-accessors)
+                           output-port)))
 
-(define (chicken/self-evaluating? datum)
-  (or (boolean? datum)
-      (char? datum)
-      (number? datum)
-      (string? datum)
-      (eof-object? datum)))
+(define-record-component-printer <alias> 'ALIAS
+  alias/name
+  alias/uid)
+
+(define-record-component-printer <classifier> 'CLASSIFIER
+  classifier/name)
+
+(define-record-component-printer <transformer> 'TRANSFORMER)
+
+(define-record-component-printer <variable> 'VARIABLE
+  variable/name
+  variable/location)
+
+(define-record-component-printer <keyword> 'KEYWORD
+  keyword/name)
+
+;++ Should these actually compile the data?  The output might be more readable.
+
+(define-record-component-printer <expression> 'EXPRESSION
+  expression/compiler)
+
+(define-record-component-printer <location> 'LOCATION
+  location/expression-compiler)
+
+(define-record-component-printer <sequence> 'SEQUENCE
+  sequence/forms)
+
+(define-record-component-printer <definition> 'DEFINITION)
+
+(define-record-component-printer <binding> 'BINDING
+  binding/variable)
 
 (define (make-chicken-environment)
   (let ((environment
@@ -82,7 +129,8 @@
 (define (chicken-macrology)
   (compose-macrologies
    (standard-macrology)
-   (non-standard-syntax-macrology)))
+   (non-standard-syntax-macrology)
+   (chicken-extensions-macrology)))
 
 (define chicken/syntactic-operations
   (let ()
@@ -123,59 +171,50 @@
           ((eq? key datum-classifier) chicken/classify-datum)
           ((eq? key self-evaluating?) chicken/self-evaluating?)
           ((eq? key combination-classifier) chicken/classify-combination)
-          ((eq? key quotation-compiler) chicken/quotation-compiler)
-          ((eq? key expression-sequence-compiler)
-           chicken/expression-sequence-compiler)
-          ((eq? key conditional-compiler) chicken/conditional-compiler)
-          ((eq? key lambda-compiler) chicken/lambda-compiler)
+          ((eq? key quotation-compiler) chicken/compile-quotation)
+          ((eq? key conditional-compiler) chicken/compile-conditional)
+          ((eq? key lambda-compiler) chicken/compile-lambda)
           ((eq? key lambda-bvl-mapper) chicken/map-lambda-bvl)
           ((eq? key meta-evaluator) chicken/meta-evaluate)
           (else #f))))
 
-(define (chicken/classify-datum datum environment history)
-  environment                           ;ignore
-  (values (make-expression (lambda () datum))
-          history))
+;;;; Miscellaneous Chicken Extensions
 
-(define (chicken/classify-free-variable name environment history)
-  history                               ;ignore
-  (chicken/make-variable-location name environment))
+(define-record-type <declaration>
+    (make-declaration forms environment)
+    declaration?
+  (forms declaration/forms)
+  (environment declaration/environment))
 
-(define (chicken/classify-variable name location environment history)
-  name history                          ;ignore
-  (chicken/make-variable-location location environment))
+(define-record-printer (<declaration> declaration output-port)
+  (print-with-components 'DECLARATION
+                         (declaration/forms declaration)
+                         output-port))
 
-(define (chicken/make-variable-location name environment)
-  environment                           ;ignore
-  (make-location (lambda () (name->symbol name))
-                 (lambda (expression assignment-history)
-                   assignment-history   ;ignore
-                   (lambda ()
-                     `(SET! ,(name->symbol name)
-                            ,(chicken/compile-expression expression))))))
+(define (make-declaration-definition selector forms environment history)
+  selector history                      ;ignore
+  (make-definition
+   (lambda (definition-environment)
+     definition-environment             ;ignore
+     (list (make-declaration forms environment)))))
 
-(define (chicken/classify-combination operator operands environment history)
-  (values (make-location
-           (lambda ()
-             (chicken/compile-combination
-              (chicken/compile-expression operator)
-              (chicken/compile-expressions operands)
-              history))
-           (lambda (expression assignment-history)
-             (lambda ()
-               (chicken/compile-combination
-                `(##SYS#SETTER ,(chicken/compile-expression operator))
-                (chicken/compile-expressions
-                 (append operands (list expression)))
-                assignment-history))))
-          history))
+(define (chicken/compile-declaration declaration)
+  ;++ Can any Chicken declarations affect local variables?  If so, this
+  ;++ needs to go through the list of forms to rename any references to
+  ;++ them.  (This is why we include the environment.)
+  `(DECLARE ,@(declaration/forms declaration)))
 
-(define (chicken/compile-combination operator operands history)
-  (let ((input-form
-         (and history (reduction/form (history/original-reduction history))))
-        (output-form `(,operator ,@operands)))
-    (chicken/clobber-source-record input-form output-form)
-    output-form))
+(define (chicken-extensions-macrology)
+  (make-extended-macrology
+   (lambda (define-classifier define-expression-compiler define-transformer)
+     define-expression-compiler define-transformer ;ignore
+     (define-classifier '(DECLARE + (NAME * DATUM))
+       (lambda (form environment history)
+         (values (make-declaration-definition cdr-selctor
+                                              (cdr form)
+                                              environment
+                                              history)
+                 history))))))
 
 (define (chicken/clobber-source-record input-form output-form)
   (if (and ##sys#line-number-database input-form)
@@ -194,43 +233,99 @@
                      output-operator
                      (cons (cons output-form line) (original-bucket)))))))))
 
-(define (chicken/quotation-compiler datum history)
-  history                               ;ignore
-  (lambda ()
-    (if (chicken/self-evaluating? datum)
-        datum
-        `',datum)))
+(define (chicken/classify-datum datum environment history)
+  environment                           ;ignore
+  (if (chicken/self-evaluating? datum)
+      (values (make-expression (lambda () datum)) history)
+      (classify-error "Inevaluable datum:" history datum)))
 
-(define (chicken/expression-sequence-compiler expressions history)
-  history                               ;ignore
-  (lambda ()
-    `(BEGIN ,@(chicken/compile-expressions expressions))))
+(define (chicken/self-evaluating? datum)
+  (or (boolean? datum)
+      (char? datum)
+      (number? datum)
+      (string? datum)
+      (eof-object? datum)))
 
-(define (chicken/conditional-compiler condition consequent alternative history)
-  history                               ;ignore
-  (lambda ()
-    `(IF ,(chicken/compile-expression condition)
-         ,(chicken/compile-expression consequent)
-         ,@(if alternative
-               `(,(chicken/compile-expression alternative))
-               '()))))
+(define (chicken/classify-variable name location environment history)
+  name                                  ;ignore
+  (chicken/make-variable-location location environment history))
 
-(define (chicken/lambda-compiler bvl body environment history)
-  history                               ;ignore
-  (lambda ()
-    `(LAMBDA ,(chicken/%map-lambda-bvl bvl
-                (lambda (variable)
-                  (name->symbol (variable/location variable))))
-       ,@(chicken/compile-lambda-body body environment))))
+(define (chicken/classify-free-variable name environment history)
+  (chicken/make-variable-location name environment history))
 
-(define (chicken/compile-lambda-body body environment)
-  (receive (bindings expressions)
-           (scan-body (sequence/selector body)
-                      (sequence/subforms body)
-                      (syntactic-extend environment)
-                      (sequence/history body))
-    `(,@(map chicken/compile-binding bindings)
+(define (chicken/make-variable-location name environment history)
+  (values (make-location (lambda () (chicken/reduce-name name environment))
+                         (lambda (expression assignment-history)
+                           assignment-history ;ignore
+                           `(SET! ,(chicken/reduce-name name environment)
+                                  ,(chicken/compile-expression expression))))
+          history))
+
+(define (chicken/classify-combination operator operator-history
+                                      selector forms environment history)
+  (cond ((not (expression? operator))
+         (classify-error "Non-expression in operator position of combination:"
+                         operator-history
+                         operator))
+        ((not (list? forms))
+         (classify-error "Invalid operands in combination -- improper list:"
+                         history
+                         forms))
+        (else
+         (values (chicken/make-combination-location operator selector forms
+                                                    environment history)
+                 history))))
+
+(define (chicken/make-combination-location operator selector forms
+                                           environment history)
+  (let ((classify-operands
+         (lambda ()
+           (classify-subexpressions selector forms environment history))))
+    (make-location
+     (lambda ()
+       (chicken/compile-combination
+        (chicken/compile-expression operator)
+        (chicken/compile-expressions (classify-operands))
+        history))
+     (lambda (expression assignment-history)
+       (chicken/compile-combination
+        `(##SYS#SETTER ,(chicken/compile-expression operator))
+        (chicken/compile-expressions
+         (append (classify-operands) (list expression)))
+        assignment-history)))))
+
+(define (chicken/compile-quotation datum history)
+  history                               ;ignore
+  (if (chicken/self-evaluating? datum)
+      datum
+      `',datum))
+
+(define (chicken/compile-conditional condition consequent alternative history)
+  history                               ;ignore
+  `(IF ,(chicken/compile-expression condition)
+       ,(chicken/compile-expression consequent)
+       ,@(if alternative
+             `(,(chicken/compile-expression alternative))
+             '())))
+
+(define (chicken/compile-lambda bvl body environment history)
+  history                               ;ignore
+  `(LAMBDA ,(chicken/%map-lambda-bvl bvl
+              (lambda (variable)
+                (chicken/reduce-name (variable/location variable)
+                                     environment)))
+     ,@(chicken/compile-lambda-body body)))
+
+(define (chicken/compile-lambda-body body)
+  (receive (definitions expressions) (classify/sequence scan-body body)
+    `(,@(map (lambda (item)
+               (cond ((binding? item) (chicken/compile-binding item))
+                     ((declaration? item) (chicken/compile-declaration item))
+                     (else (error "Invalid item in body:" item))))
+             definitions)
       ,@(map chicken/compile-expression expressions))))
+
+;++ Handle DSSSL-extended BVLs.
 
 (define (chicken/map-lambda-bvl bvl history procedure)
   (if (not (chicken/valid-bvl? bvl))
@@ -238,16 +333,15 @@
       (chicken/%map-lambda-bvl bvl procedure)))
 
 (define (chicken/valid-bvl? bvl)
-  (or (##sys#extended-lambda-list? bvl)
-      (let loop ((bvl bvl) (seen '()))
-        (cond ((pair? bvl)
-               (and (name? (car bvl))
-                    (not (memq (car bvl) seen))
-                    (loop (cdr bvl) (cons (car bvl) seen))))
-              ((null? bvl)
-               #t)
-              (else
-               (name? bvl))))))
+  (let loop ((bvl bvl) (seen '()))
+    (cond ((pair? bvl)
+           (and (name? (car bvl))
+                (not (memq (car bvl) seen))
+                (loop (cdr bvl) (cons (car bvl) seen))))
+          ((null? bvl)
+           #t)
+          (else
+           (name? bvl)))))
 
 (define (chicken/%map-lambda-bvl bvl procedure)
   (let recur ((bvl bvl))
@@ -258,3 +352,36 @@
            '())
           (else
            (procedure bvl)))))
+
+;;;; Compilation Utilities
+
+(define (chicken/compile-expression expression)
+  (cond ((location? expression)
+         ((location/expression-compiler expression)))
+        ((sequence? expression)
+         (chicken/compile-sequence
+          (classify/sequence scan-expressions expression)
+          (sequence/history expression)))
+        (else
+         ((expression/compiler expression)))))
+
+(define (chicken/compile-expressions expressions)
+  (map chicken/compile-expression expressions))
+
+(define (chicken/compile-combination operator operands history)
+  (let ((input-form
+         (and history (reduction/form (history/original-reduction history))))
+        (output-form `(,operator ,@operands)))
+    (chicken/clobber-source-record input-form output-form)
+    output-form))
+
+(define (chicken/compile-binding binding)
+  `(DEFINE ,(chicken/reduce-name (variable/location (binding/variable binding))
+                                 (binding/environment binding))
+     ,(receive (expression history) ((binding/classifier binding))
+        history                         ;ignore
+        (chicken/compile-expression expression))))
+
+(define (chicken/compile-sequence expressions history)
+  history                               ;ignore
+  `(BEGIN ,@(chicken/compile-expressions expressions)))
