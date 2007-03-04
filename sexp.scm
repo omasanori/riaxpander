@@ -16,16 +16,27 @@
          (car results)
          `(BEGIN ,@results)))
    (map (lambda (item)
-          (strip-syntax*
-           (cond ((binding? item) (sexp/compile-binding item))
-                 ((expression? item) (sexp/compile-expression item))
-                 (else (error "Invalid item in output:" item)))))
+          (cond ((binding? item) (sexp/compile-binding item))
+                ((expression? item) (sexp/compile-expression item))
+                (else (error "Invalid item in output:" item))))
         (let ((environment (make-sexp-environment)))
           (scan-top-level identity-selector
                           forms
                           environment
                           (make-top-level-history forms environment))))))
 
+(define (sexp/meta-evaluate expression environment)
+  environment                           ;ignore
+  (eval expression (interaction-environment)))
+
+(define (sexp/reduce-name name environment)
+  (let loop ((name name))
+    (if (alias? name)
+        (if (name=? environment name environment (alias/name name))
+            (loop (alias/name name))
+            name)
+        name)))
+
 (define (make-sexp-environment)
   (let ((environment
          (make-syntactic-environment sexp/syntactic-operations
@@ -38,10 +49,6 @@
 (define (sexp/macrology)
   (standard-macrology))
 
-(define (sexp/meta-evaluate expression environment)
-  environment                           ;ignore
-  (eval expression (interaction-environment)))
-
 (define sexp/syntactic-operations
   (let ()
     (define (global-bindings environment)
@@ -81,23 +88,18 @@
           ((eq? key datum-classifier) sexp/classify-datum)
           ((eq? key self-evaluating?) sexp/self-evaluating?)
           ((eq? key combination-classifier) sexp/classify-combination)
-          ((eq? key expression-sequence-compiler)
-           sexp/expression-sequence-compiler)
-          ((eq? key conditional-compiler) sexp/conditional-compiler)
-          ((eq? key quotation-compiler) sexp/quotation-compiler)
-          ((eq? key lambda-compiler) sexp/lambda-compiler)
+          ((eq? key conditional-compiler) sexp/compile-conditional)
+          ((eq? key quotation-compiler) sexp/compile-quotation)
+          ((eq? key lambda-compiler) sexp/compile-lambda)
           ((eq? key lambda-bvl-mapper) sexp/map-lambda-bvl)
           ((eq? key meta-evaluator) sexp/meta-evaluate)
           (else #f))))
 
-;;;; S-Expression Parameters
-
 (define (sexp/classify-datum datum environment history)
   environment                           ;ignore
   (if (sexp/self-evaluating? datum)
-      (values (make-expression (lambda () datum))
-              history)
-      (syntax-error "Invalid form:" history datum)))
+      (values (make-expression (lambda () datum)) history)
+      (classify-error "Inevaluable datum:" history datum)))
 
 (define (sexp/self-evaluating? datum)
   (or (boolean? datum)
@@ -106,62 +108,66 @@
       (string? datum)))
 
 (define (sexp/classify-variable name location environment history)
-  name history                          ;ignore
-  (sexp/make-variable-location location environment))
+  name                                  ;ignore
+  (sexp/make-variable-location location environment history))
 
 (define (sexp/classify-free-variable name environment history)
-  history                               ;ignore
-  (sexp/make-variable-location name environment))
+  (sexp/make-variable-location name environment history))
 
-(define (sexp/make-variable-location name environment)
-  (make-location (lambda ()
-                   name)
-                 (lambda (expression history)
-                   history              ;ignore
-                   (lambda ()
-                     `(SET! ,name ,(sexp/compile-expression expression))))))
-
-(define (sexp/classify-combination operator operands environment history)
-  environment                           ;ignore
-  (values (make-expression
-           (lambda ()
-             (sexp/compile-combination operator operands history)))
+(define (sexp/make-variable-location name environment history)
+  (values (make-location (lambda () (sexp/reduce-name name environment))
+                         (lambda (expression assignment-history)
+                           assignment-history ;ignore
+                           `(SET! ,(sexp/reduce-name name environment)
+                                  ,(sexp/compile-expression expression))))
           history))
 
-(define (sexp/compile-expression expression)
-  ((expression/compiler expression)))
-
-(define (sexp/compile-expressions expressions)
-  (map sexp/compile-expression expressions))
-
-(define (sexp/compile-binding binding)
-  `(DEFINE ,(variable/location (binding/variable binding))
-     ,(sexp/compile-expression (binding/expression binding))))
-
-(define (sexp/compile-combination operator operands history)
-  history                               ;ignore
-  `(,(sexp/compile-expression operator)
-    ,@(sexp/compile-expressions operands)))
+(define (sexp/classify-combination operator operator-history
+                                   selector forms environment history)
+  (cond ((not (expression? operator))
+         (classify-error "Non-expression in operator position of combination:"
+                         operator-history
+                         operator))
+        ((not (list? forms))
+         (classify-error "Invalid operands in combination -- improper list:"
+                         history
+                         forms))
+        (else
+         (values
+          (make-expression
+           (lambda ()
+             (sexp/compile-combination
+              operator
+              (classify-subexpressions selector forms environment history)
+              history)))
+          history))))
 
-(define (sexp/quotation-compiler datum history)
+(define (sexp/compile-quotation datum history)
   history                               ;ignore
   (if (sexp/self-evaluating? datum)
-      (lambda () datum)
-      (lambda () `',datum)))
+      datum
+      `',datum))
 
-(define (sexp/expression-sequence-compiler expressions history)
+(define (sexp/compile-conditional condition consequent alternative history)
   history                               ;ignore
-  (lambda ()
-    `(BEGIN ,@(map sexp/compile-expression expressions))))
+  `(IF ,(sexp/compile-expression condition)
+       ,(sexp/compile-expression consequent)
+       ,@(if alternative
+             `(,(sexp/compile-expression alternative))
+             '())))
 
-(define (sexp/conditional-compiler condition consequent alternative history)
+(define (sexp/compile-lambda bvl body environment history)
   history                               ;ignore
-  (lambda ()
-    `(IF ,(sexp/compile-expression condition)
-         ,(sexp/compile-expression consequent)
-         ,@(if alternative
-               `(,(sexp/compile-expression alternative))
-               '()))))
+  `(LAMBDA ,(sexp/%map-lambda-bvl bvl
+              (lambda (variable)
+                (sexp/reduce-name (variable/location variable) environment)))
+     ,@(sexp/compile-lambda-body body)))
+
+(define (sexp/compile-lambda-body body)
+  (receive (bindings expressions)
+           (classify/sequence scan-body body)
+    `(,@(map sexp/compile-binding bindings)
+      ,@(map sexp/compile-expression expressions))))
 
 (define (sexp/map-lambda-bvl bvl history procedure)
   (sexp/%map-lambda-bvl (sexp/guarantee-lambda-bvl bvl history) procedure))
@@ -194,18 +200,32 @@
                original-bvl)
               (else
                (lose)))))))
+
+;;;; Compilation Utilities
 
-(define (sexp/lambda-compiler bvl body environment history)
-  (lambda ()
-    `(LAMBDA ,(sexp/%map-lambda-bvl bvl variable/location)
-       ,@(sexp/compile-lambda-body body environment))))
+(define (sexp/compile-expression expression)
+  (cond ((location? expression)
+         ((location/expression-compiler expression)))
+        ((sequence? expression)
+         (sexp/compile-sequence (classify/sequence scan-expressions expression)
+                                (sequence/history expression)))
+        (else
+         ((expression/compiler expression)))))
 
-(define (sexp/compile-lambda-body body environment)
-  (receive (bindings expressions)
-           (scan-body (sequence/selector body)
-                      (sequence/subforms body)
-                      (syntactic-extend environment)
-                      (sequence/history body))
-    `(,@(map sexp/compile-binding bindings)
-      ,@(map sexp/compile-expression expressions))))
+(define (sexp/compile-expressions expressions)
+  (map sexp/compile-expression expressions))
 
+(define (sexp/compile-combination operator operands history)
+  history                               ;ignore
+  `(,(sexp/compile-expression operator) ,@(sexp/compile-expressions operands)))
+
+(define (sexp/compile-binding binding)
+  `(DEFINE ,(sexp/reduce-name (variable/location (binding/variable binding))
+                              (binding/environment binding))
+     ,(receive (expression history) ((binding/classifier binding))
+        history                         ;ignore
+        (sexp/compile-expression expression))))
+
+(define (sexp/compile-sequence expressions history)
+  history                               ;ignore
+  `(BEGIN ,@(map sexp/compile-expression expressions)))
