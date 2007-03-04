@@ -39,6 +39,11 @@
     classify-expression classify-subexpression  classify-subexpressions
     classify-location   classify-sublocation    classify-sublocations
     classify-keyword    classify-subkeyword     classify-subkeywords
+    classifier->operator        classifier->form
+    transformer->operator       transformer->form
+    call-with-syntactic-environment
+    call-with-syntactic-history
+    call-with-syntax-error-procedure
     classify-sequence
     classify/sequence
     scan-expressions
