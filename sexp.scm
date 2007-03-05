@@ -26,6 +26,9 @@
                           (make-top-level-history forms environment))))))
 
 (define (sexp/meta-evaluate expression environment)
+  ;; ENVIRONMENT is a syntactic environment, not an R5RS environment
+  ;; specifier (or `evaluation environment', perhaps), and is
+  ;; therefore unsuitable as an argument to EVAL.
   environment                           ;ignore
   (eval expression (interaction-environment)))
 
