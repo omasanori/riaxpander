@@ -142,8 +142,17 @@
 
 (define (chicken-macrology)
   (compose-macrologies
-   (standard-macrology)
-   (non-standard-syntax-macrology)
+   (macrology/standard-assignment)
+   (macrology/standard-conditional chicken/compile-conditional)
+   (macrology/standard-definition)
+   (macrology/standard-derived-syntax)
+   (macrology/standard-keyword-definition)
+   (macrology/standard-lambda chicken/compile-lambda chicken/map-lambda-bvl)
+   (macrology/standard-quotation chicken/compile-quotation)
+   (macrology/standard-sequence)
+   (macrology/standard-syntactic-binding)
+   (macrology/er-macro-transformer)
+   (macrology/syntax-quote 'QUOTE chicken/compile-quotation)
    (chicken-extensions-macrology)))
 
 (define chicken/syntactic-operations
@@ -182,13 +191,9 @@
   (lambda (key)
     (cond ((eq? key variable-classifier) chicken/classify-variable)
           ((eq? key free-variable-classifier) chicken/classify-free-variable)
+          ((eq? key combination-classifier) chicken/classify-combination)
           ((eq? key datum-classifier) chicken/classify-datum)
           ((eq? key self-evaluating?) chicken/self-evaluating?)
-          ((eq? key combination-classifier) chicken/classify-combination)
-          ((eq? key quotation-compiler) chicken/compile-quotation)
-          ((eq? key conditional-compiler) chicken/compile-conditional)
-          ((eq? key lambda-compiler) chicken/compile-lambda)
-          ((eq? key lambda-bvl-mapper) chicken/map-lambda-bvl)
           ((eq? key meta-evaluator) chicken/meta-evaluate)
           (else #f))))
 
@@ -219,16 +224,18 @@
   `(DECLARE ,@(declaration/forms declaration)))
 
 (define (chicken-extensions-macrology)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-expression-compiler define-transformer ;ignore
-     (define-classifier '(DECLARE + (NAME * DATUM))
-       (lambda (form environment history)
-         (values (make-declaration-definition cdr-selctor
-                                              (cdr form)
-                                              environment
-                                              history)
-                 history))))))
+  (compose-macrologies
+   (macrology/er-macro-transformer)
+   (macrology/syntax-quote 'SYNTAX-QUOTE chicken/compile-quotation)
+   (make-extended-classifier-macrology
+    (lambda (define-classifier)
+      (define-classifier '(DECLARE + (NAME * DATUM))
+        (lambda (form environment history)
+          (values (make-declaration-definition cdr-selctor
+                                               (cdr form)
+                                               environment
+                                               history)
+                  history)))))))
 
 (define (chicken/clobber-source-record input-form output-form)
   (if (and ##sys#line-number-database input-form)
