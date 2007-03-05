@@ -11,7 +11,8 @@
    (macrology/standard-variable-binding)
    (macrology/standard-boolean-connectives)
    (macrology/standard-iteration)
-   (macrology/standard-derived-conditional)))
+   (macrology/standard-derived-conditional)
+   (macrology/standard-quasiquote)))
 
 (define (make-extended-classifier-macrology receiver)
   (make-classifier-macrology
@@ -606,6 +607,72 @@
                                             (select-car selector)
                                             clause))))))))))
        '(BEGIN EQV? IF LET QUOTE)))))
+
+;;;;; Quasiquote
+
+(define (macrology/standard-quasiquote)
+  (make-extended-er-macro-transformer-macrology
+   (lambda (define-transformer)
+     ;++ This should check for misplaced uses of the keywords.
+     (define quasiquote? (pattern-predicate '('QUASIQUOTE DATUM)))
+     (define unquote? (pattern-predicate '('UNQUOTE DATUM)))
+     (define unquote-splicing? (pattern-predicate '('UNQUOTE-SPLICING DATUM)))
+     (define-transformer '(QUASIQUOTE DATUM)
+       (lambda (form rename compare)
+         (call-with-syntax-error-procedure
+           (lambda (syntax-error)
+             (define (qq-quote datum)
+               (list (rename 'QUOTE) datum))
+             (define (qq-cons car-expression cdr-expression)
+               (list (rename 'CONS) car-expression cdr-expression))
+             (define (qq-append list-expression tail-expression)
+               (list (rename 'APPEND) list-expression tail-expression))
+             (define (qq-list->vector list-expression)
+               (list (rename 'LIST->VECTOR) list-expression))
+             (define (qq-nest keyword template depth)
+               (list (rename 'LIST) (qq-quote keyword) (qq template depth)))
+
+             (define (qq template depth)
+               (cond ((pair? template) (qq-pair template depth))
+                     ((vector? template) (qq-vector template depth))
+                     (else (qq-quote template))))
+
+             (define (qq-pair template depth)
+               (cond ((quasiquote? template rename compare)
+                      (qq-nest 'QUASIQUOTE (cadr template) (+ depth 1)))
+                     ((unquote? template rename compare)
+                      (if (zero? depth)
+                          (cadr template)
+                          (qq-nest 'UNQUOTE (cadr template) (- depth 1))))
+                     ((unquote-splicing? template rename compare)
+                      ;++ Pass the correct selector here.
+                      (syntax-error "Misplaced ,@ template:" #f template))
+                     (else
+                      (qq-list template depth qq))))
+
+             (define (qq-vector template depth)
+               (qq-list->vector
+                (let recur ((template (vector->list template)) (depth depth))
+                  (if (null? template)
+                      (qq-quote '())
+                      (qq-list template depth recur)))))
+
+             (define (qq-list template depth recur)
+               (let ((element (car template))
+                     (tail (cdr template)))
+                 (if (unquote-splicing? element rename compare)
+                     (if (zero? depth)
+                         (if (null? tail)
+                             (cadr element)
+                             (qq-append (cadr element) (qq tail depth)))
+                         (qq-cons (qq-nest 'UNQUOTE-SPLICING
+                                           (cadr element)
+                                           (- depth 1))
+                                  (recur tail depth)))
+                     (qq-cons (qq element depth) (recur tail depth)))))
+
+             (qq (cadr form) 0))))
+       '(APPEND CONS LIST LIST->VECTOR QUASIQUOTE QUOTE)))))
 
 ;;;; Non-Standard Primitive Syntax
 
