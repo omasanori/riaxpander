@@ -37,6 +37,8 @@
             name)
         name)))
 
+;;;; S-Expression Syntactic Environment
+
 (define (make-sexp-environment)
   (let ((environment
          (make-syntactic-environment sexp/syntactic-operations
@@ -47,7 +49,17 @@
     environment))
 
 (define (sexp/macrology)
-  (standard-macrology))
+  (compose-macrologies                  ;Alphabetically listed, for no reason.
+   (macrology/standard-assignment)
+   (macrology/standard-conditional sexp/compile-conditional)
+   (macrology/standard-definition)
+   (macrology/standard-derived-syntax)
+   (macrology/standard-lambda sexp/compile-lambda sexp/map-lambda-bvl)
+   (macrology/standard-quotation sexp/compile-quotation)
+   (macrology/standard-sequence)
+   (macrology/standard-syntactic-binding)
+   ;; Add on SYNTAX-QUOTE, ER-MACRO-TRANSFORMER, &c.
+   ))
 
 (define sexp/syntactic-operations
   (let ()
@@ -88,13 +100,11 @@
           ((eq? key datum-classifier) sexp/classify-datum)
           ((eq? key self-evaluating?) sexp/self-evaluating?)
           ((eq? key combination-classifier) sexp/classify-combination)
-          ((eq? key conditional-compiler) sexp/compile-conditional)
-          ((eq? key quotation-compiler) sexp/compile-quotation)
-          ((eq? key lambda-compiler) sexp/compile-lambda)
-          ((eq? key lambda-bvl-mapper) sexp/map-lambda-bvl)
           ((eq? key meta-evaluator) sexp/meta-evaluate)
           (else #f))))
 
+;;;;; S-Expression Syntactic Parameters
+
 (define (sexp/classify-datum datum environment history)
   environment                           ;ignore
   (if (sexp/self-evaluating? datum)
@@ -142,6 +152,8 @@
               history)))
           history))))
 
+;;;;; S-Expression Compilers
+
 (define (sexp/compile-quotation datum history)
   history                               ;ignore
   (if (sexp/self-evaluating? datum)
@@ -201,7 +213,7 @@
               (else
                (lose)))))))
 
-;;;; Compilation Utilities
+;;;;; S-Expression Compilation Utilities
 
 (define (sexp/compile-expression expression)
   (cond ((location? expression)
