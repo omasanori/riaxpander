@@ -14,15 +14,30 @@
 
 (define-interface syntactic-standard-macrology-interface
   (export
-    standard-macrology
-    standard-core-macrology
-    standard-definition-macrology
-    curried-definition-macrology
-    overloaded-definition-macrology
-    standard-syntactic-binding-macrology
-    standard-variable-binding-macrology
-    standard-derived-syntax-macrology
-    non-standard-syntax-macrology
+    ;; Primitive syntax
+    macrology/standard-assignment
+    macrology/standard-conditional
+    macrology/standard-lambda
+    macrology/standard-quotation
+    macrology/standard-sequence
+    macrology/standard-syntactic-binding
+
+    ;; Definition syntax
+    macrology/curried-definition
+    macrology/overloaded-definition
+    macrology/standard-definition
+    macrology/standard-keyword-definition
+
+    ;; Derived syntax
+    macrology/standard-derived-syntax   ;Subsumes the following:
+    macrology/standard-boolean-connectives
+    macrology/standard-iteration
+    macrology/standard-derived-conditional
+    macrology/standard-variable-binding
+
+    ;; Non-standard syntactic extensions
+    macrology/er-macro-transformer
+    macrology/syntax-quote
     ))
 
 (define-interface syntactic-classifier-interface
@@ -134,18 +149,13 @@
     datum-classifier
     combination-classifier
     self-evaluating?
-    quotation-compiler
-    conditional-compiler
-    lambda-bvl-mapper
-    lambda-compiler
     meta-evaluator
     meta-evaluate
 
     apply-macrology
     null-macrology
-    make-macrology
     make-classifier-macrology
-    make-transformer-macrology
+    make-er-macro-transformer-macrology
     compose-macrologies
     ))
 
