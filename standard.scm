@@ -1,43 +1,54 @@
 ;;; -*- Mode: Scheme -*-
 
 ;;;; Explicit Renaming Macros
-;;;; Standard Syntax
+;;;; Macrologies for Standard Syntax
 
 ;;; This code is written by Taylor R. Campbell and placed in the Public
 ;;; Domain.  All warranties are disclaimed.
 
-(define (standard-macrology)
+(define (macrology/standard-derived-syntax)
   (compose-macrologies
-   (standard-core-macrology)
-   (standard-definition-macrology)
-   (standard-syntactic-binding-macrology)
-   (standard-variable-binding-macrology)
-   (standard-derived-syntax-macrology)))
+   (macrology/standard-variable-binding)
+   (macrology/standard-boolean-connectives)
+   (macrology/standard-iteration)
+   (macrology/standard-derived-conditional)))
 
-(define (make-extended-macrology procedure)
-  (make-macrology
-   (lambda (*define-classifier *define-transformer)
-
+(define (make-extended-classifier-macrology receiver)
+  (make-classifier-macrology
+   (lambda (*define-classifier)
      (define (define-classifier pattern procedure)
        (*define-classifier (car pattern)
          (let ((predicate (pattern-predicate `(KEYWORD ,@(cdr pattern)))))
            (lambda (form environment history)
              (if (predicate form
-                            (make-alias-generator (make-alias-token)
-                                                  environment
-                                                  (car pattern))
+                            (make-alias-generator
+                             (make-alias-token)
+                             environment
+                             ;; Passing the introducer name is not necessary
+                             ;; because we never store the names in any output
+                             ;; that could require later resolution.  (We don't
+                             ;; *have* the name anyway; see CLASSIFY/CLASSIFIER
+                             ;; in classify.scm.)
+                             #f)
                             (make-name-comparator environment))
                  (procedure form environment history)
-                 (syntax-error "Invalid syntax:" history form))))))
+                 (classify-error "Invalid syntax:" history form))))))
+     (receiver define-classifier))))
 
+(define (make-expression-compiler-macrology receiver)
+  (make-extended-classifier-macrology
+   (lambda (define-classifier)
      (define (define-expression-compiler pattern procedure)
        (define-classifier pattern
          (lambda (form environment history)
-           (values (make-expression
-                    (lambda ()
-                      (procedure form environment history)))
+           (values (make-expression (lambda ()
+                                      (procedure form environment history)))
                    history))))
+     (receiver define-expression-compiler))))
 
+(define (make-extended-er-macro-transformer-macrology receiver)
+  (make-er-macro-transformer-macrology
+   (lambda (*define-transformer)
      (define (define-transformer pattern procedure auxiliary-names)
        (*define-transformer (car pattern)
          (let ((predicate (pattern-predicate `(KEYWORD ,@(cdr pattern)))))
@@ -46,27 +57,17 @@
                  (procedure form rename compare)
                  form)))
          auxiliary-names))
+     (receiver define-transformer))))
 
-     (procedure define-classifier
-                define-expression-compiler
-                define-transformer))))
-
-(define (make-standard-transformer-macrology procedure)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-classifier define-expression-compiler ;ignore
-     (procedure define-transformer))))
-
-;++ This should be implemented properly.
-
-(define (call-with-syntax-error-procedure receiver)
-  (receiver (lambda (message selector . irritants)
-              selector                  ;ignore
-              (apply error message irritants))))
+(define (define-expression-compiler-macrology pattern procedure)
+  (make-expression-compiler-macrology
+   (lambda (define-expression-compiler)
+     (define-expression-compiler pattern procedure))))
 
+;;;; Rudimentary Syntax Pattern Checking
+
 ;;; This pattern predicate mechanism is not for use outside this file.
-;;; Please use a real pattern matcher instead.  This is used only for
-;;; the sake of bootstrapping.
+;;; Please use a real pattern matcher instead.
 
 ;++ Improvement:  Record the position of the subexpression
 ;++ that went wrong, and report that in the syntax error.
@@ -194,91 +195,94 @@
                (tail? form))
               (else #f))))))
 
-(define (standard-core-macrology)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-transformer                 ;ignore
+;;;; Standard Primitive Syntax
 
+(define (macrology/standard-assignment)
+  (define-expression-compiler-macrology '(SET! LOCATION EXPRESSION)
+    (lambda (form environment history)
+      (define (subform classifier selector cxr)
+        (receive (classification history)
+            (classifier selector (cxr form) environment history)
+          history                       ;ignore
+          classification))
+      ((location/assignment-compiler
+        (subform classify-sublocation cadr-selector cadr))
+       (subform classify-subexpression caddr-selector caddr)
+       history))))
+
+(define (macrology/standard-conditional compiler)
+  (define-expression-compiler-macrology '(IF EXPRESSION
+                                             EXPRESSION
+                                             ? EXPRESSION)
+    (lambda (form environment history)
+      (define (subexpression selector cxr)
+        (receive (expression history)
+            (classify-subexpression selector (cxr form) environment history)
+          history                       ;ignore
+          expression))
+      (let ((condition (subexpression cadr-selector cadr))
+            (consequent (subexpression caddr-selector caddr))
+            (alternative
+             (and (pair? (cdddr form))
+                  (subexpression cadddr-selector cadddr))))
+        (compiler condition consequent alternative history)))))
+
+(define (macrology/standard-lambda compiler lambda-bvl-mapper)
+  (define-expression-compiler-macrology '(LAMBDA BVL + FORM)
+    (lambda (form environment history)
+      (let* ((environment* (syntactic-extend environment))
+             (bvl*
+              (let ((bvl (cadr form)))
+                (lambda-bvl-mapper
+                 bvl
+                 (history/add-subform history cadr-selector bvl environment)
+                 (lambda (name)
+                   (bind-variable! name environment*))))))
+        (syntactic-seal! environment*)
+        (compiler bvl*
+                  (make-sequence cddr-selector
+                                 (cddr form)
+                                 (syntactic-extend environment*)
+                                 history)
+                  environment*
+                  history)))))
+
+(define (macrology/standard-quotation compiler)
+  (define-expression-compiler-macrology '(QUOTE DATUM)
+    (lambda (form environment history)
+      environment                       ;ignore
+      (compiler (strip-syntax (cadr form)) history))))
+
+(define (macrology/standard-sequence)
+  (make-extended-classifier-macrology
+   (lambda (define-classifier)
      (define-classifier '(BEGIN * FORM)
        (lambda (form environment history)
-         (classify-sequence cdr-selector (cdr form) environment history)))
-
-     (define-expression-compiler '(IF EXPRESSION EXPRESSION ? EXPRESSION)
-       (lambda (form environment history)
-         (define (subexpression selector cxr)
-           (receive (expression history)
-               (classify-subexpression selector (cxr form) environment history)
-             history                    ;ignore
-             expression))
-         (let* ((condition (subexpression cadr-selector cadr))
-                (consequent (subexpression caddr-selector caddr))
-                (alternative
-                 (and (pair? (cdddr form))
-                      (subexpression cadddr-selector cadddr))))
-           ((conditional-compiler environment) condition
-                                               consequent
-                                               alternative
-                                               history))))
-
-     (define-expression-compiler '(QUOTE DATUM)
-       (lambda (form environment history)
-         ((quotation-compiler environment) (strip-syntax (cadr form))
-                                           history)))
-
-     (define-expression-compiler '(SET! LOCATION EXPRESSION)
-       (lambda (form environment history)
-         (define (subform classifier selector cxr)
-           (receive (classification history)
-               (classifier selector (cxr form) environment history)
-             history                    ;ignore
-             classification))
-         ((location/assignment-compiler
-           (subform classify-sublocation cadr-selector cadr))
-          (subform classify-subexpression caddr-selector caddr)
-          history)))
-
-     (define-expression-compiler '(LAMBDA BVL + FORM)
-       (lambda (form environment history)
-         (let* ((environment* (syntactic-extend environment))
-                (bvl*
-                 (let ((bvl (cadr form)))
-                   ((lambda-bvl-mapper environment)
-                    bvl
-                    (history/add-subform history cadr-selector bvl environment)
-                    (lambda (name)
-                      (bind-variable! name environment*))))))
-           (syntactic-seal! environment*)
-           ((lambda-compiler environment)
-            bvl*
-            (make-sequence cddr-selector
-                           (cddr form)
-                           (syntactic-extend environment*)
-                           history)
-            environment*
-            history)))))))
+         (classify-sequence cdr-selector (cdr form) environment history))))))
 
-(define (standard-definition-macrology)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-expression-compiler define-transformer ;ignore
-     (define-variable-definer define-classifier standard-definition-pattern
-       make-variable-definition)
-     (define-syntax-definer define-classifier))))
+;;;; Definition Syntax
 
-(define (curried-definition-macrology)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-expression-compiler define-transformer ;ignore
-     (define-variable-definer define-classifier curried-definition-pattern
-       make-variable-definition)
-     (define-syntax-definer define-classifier))))
+(define (macrology/standard-keyword-definition)
+  (make-extended-classifier-macrology
+   (lambda (define-classifier)
+     (define-classifier '(DEFINE-SYNTAX NAME FORM)
+       (lambda (form environment history)
+         (values (make-keyword-definition cadr-selector (cadr form)
+                                          caddr-selector (caddr form)
+                                          environment history)
+                 history))))))
 
-(define (overloaded-definition-macrology)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-expression-compiler define-transformer ;ignore
-     (define-variable-definer define-classifier curried-definition-pattern
-       make-overloaded-definition))))
+(define (macrology/standard-definition)
+  (make-definition-macrology standard-definition-pattern
+                             make-variable-definition))
+
+(define (macrology/curried-definition)
+  (make-definition-macrology curried-definition-pattern
+                             make-variable-definition))
+
+(define (macrology/overloaded-definition)
+  (make-definition-macrology curried-definition-pattern
+                             make-overloaded-definition))
 
 (define standard-definition-pattern
   '(DEFINE . (OR (NAME EXPRESSION) ((NAME . BVL) + FORM))))
@@ -292,117 +296,92 @@
                . BVL))))
     `(DEFINE . (OR (NAME EXPRESSION) (,curried? + FORM)))))
 
-(define (define-variable-definer define-classifier pattern make-definition)
-  (define-classifier pattern
-    (lambda (form environment history)
-      (if (name? (cadr form))
-          (values (make-definition cadr-selector (cadr form)
-                                   caddr-selector (caddr form)
-                                   environment history)
-                  history)
-          (classify-reduction
-           (let ((define-keyword (car form))
-                 (name (caadr form))
-                 (bvl (cdadr form))
-                 (body (cddr form)))
-             (let ((lambda-keyword      ;++ Better absolute reference...
-                    (generate-alias 'LAMBDA environment define-keyword)))
-               `(,define-keyword ,name (,lambda-keyword ,bvl ,@body))))
-           environment
-           history)))))
+(define (make-definition-macrology pattern make-definition)
+  (make-extended-er-macro-transformer-macrology
+   (lambda (define-transformer)
+     (define-transformer pattern
+       (let ((definition-operator (make-definition-operator make-definition)))
+         (lambda (form rename compare)
+           (if (name? (cadr form))
+               (let ((name (cadr form))
+                     (expression (caddr form)))
+                 `(,definition-operator ,name ,expression))
+               (let ((define (car form))
+                     (name (caadr form))
+                     (lambda (rename 'LAMBDA))
+                     (bvl (cdadr form))
+                     (body (cddr form)))
+                 `(,define ,name (,lambda ,bvl ,@body))))))
+       '(LAMBDA)))))
 
-(define (define-syntax-definer define-classifier)
-  (define-classifier '(DEFINE-SYNTAX NAME FORM)
-    (lambda (form environment history)
-      (values (make-keyword-definition cadr-selector (cadr form)
-                                       caddr-selector (caddr form)
-                                       environment history)
-              history))))
+(define (make-definition-operator make-definition)
+  (classifier->operator
+   (lambda (form environment history)
+     (values (make-definition cadr-selector (cadr form)
+                              caddr-selector (caddr form)
+                              environment history)
+             history))))
 
-(define (make-syntactic-binding-macrology classifier)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-expression-compiler define-transformer ;ignore
+;;;; Local Syntactic Bindings: LET-SYNTAX & LETREC-SYNTAX
 
-     (let ()
+;;; This does not implement R5RS semantics, which requires that the
+;;; body consist only of expressions.  This does, however, implement
+;;; R6RS semantics, and, much as I am opposed to R6RS, I prefer its
+;;; LET-SYNTAX semantics.  If one wishes to introduce a new scope, one
+;;; can write the LET explicitly.  Implementing R5RS sematics is more
+;;; trouble than it's worth to do correctly.
 
-       (define (local-syntax form environment closing-environment history)
-         (select-for-each cadr-selector (cadr form)
-           (lambda (selector binding)
-             (receive (keyword history)
-                 (classify-subkeyword (select-car (select-cdr selector))
-                                      (cadr binding)
-                                      closing-environment
-                                      history)
-               history                  ;ignore
-               (syntactic-bind! environment
-                                (car binding)
-                                (keyword/denotation keyword)))))
-         (classifier cddr-selector (cddr form) environment history (car form)))
+(define (macrology/standard-syntactic-binding)
+  (make-extended-classifier-macrology
+   (lambda (define-classifier)
 
-       (define-classifier '(LET-SYNTAX (* (@ "LET-SYNTAX binding"
-                                             (NAME EXPRESSION)))
-                             + FORM)
-         (lambda (form environment history)
-           (local-syntax form
-                         (syntactic-extend environment)
-                         environment
-                         history)))
+     (define (local-syntax form environment enclosing-environment history)
+       (select-for-each cadr-selector (cadr form)
+         (lambda (selector binding)
+           (receive (keyword history)
+               (classify-subkeyword (select-car (select-cdr selector))
+                                    (cadr binding)
+                                    enclosing-environment
+                                    history)
+             history                    ;ignore
+             (syntactic-bind! environment
+                              (car binding)
+                              (keyword/denotation keyword)))))
+       (classify-sequence cddr-selector (cddr form) environment history))
 
-       (define-classifier '(LETREC-SYNTAX (* (@ "LETREC-SYNTAX binding"
-                                                (NAME EXPRESSION)))
-                             + FORM)
-         (lambda (form environment history)
-           (let ((environment (syntactic-extend environment)))
-             (local-syntax form environment environment history))))))))
+     (define-classifier '(LET-SYNTAX (* (@ "LET-SYNTAX binding"
+                                           (NAME EXPRESSION)))
+                           + FORM)
+       (lambda (form enclosing-environment history)
+         (let ((environment (syntactic-extend enclosing-environment)))
+           (local-syntax form environment enclosing-environment history))))
 
-;;; Per R5RS, LET-SYNTAX and LETREC-SYNTAX always introduce a new
-;;; scope.  This means, though, that one can't do something along
-;;; these lines:
-;;;
-;;;   (let-syntax ((define-foo ...))
-;;;     (define-foo mumble)
-;;;     (define-foo grumble)),
-;;;
-;;; which is often a useful idiom, and which I believe Chez supports.
-;;; So we provide two options.
-
-(define (standard-syntactic-binding-macrology)
-  (make-syntactic-binding-macrology
-   (lambda (selector forms environment history keyword)
-     selector                           ;ignore
-     (classify-reduction
-      ;++ This should probably not generate a reference to LET.
-      `(,(generate-alias 'LET environment keyword) () ,@forms)
-      environment
-      history))))
-
-(define (non-standard-syntactic-binding-macrology)
-  (make-syntactic-binding-macrology
-   (lambda (selector forms environment history keyword)
-     keyword                            ;ignore
-     (classify-sequence selector forms environment history))))
+     (define-classifier '(LETREC-SYNTAX (* (@ "LETREC-SYNTAX binding"
+                                              (NAME EXPRESSION)))
+                           + FORM)
+       (lambda (form enclosing-environment history)
+         (let ((environment (syntactic-extend enclosing-environment)))
+           (local-syntax form environment environment history)))))))
 
-(define (standard-variable-binding-macrology)
-  (make-standard-transformer-macrology
+;;;; Local Variable Bindings: LET, LET*, & LETREC
+
+(define (macrology/standard-variable-binding)
+  (make-extended-er-macro-transformer-macrology
    (lambda (define-transformer)
 
      (define-transformer '(LET . DATUM)   ;Dummy pattern.
-       (let ((unnamed-let?
-              (pattern-predicate
-               '(KEYWORD (* (NAME EXPRESSION)) + FORM)))
+       (let ((unnamed-let? (pattern-predicate '((* (NAME EXPRESSION)) + FORM)))
              (named-let?
-              (pattern-predicate
-               '(KEYWORD NAME (* (NAME EXPRESSION)) + FORM))))
+              (pattern-predicate '(NAME (* (NAME EXPRESSION)) + FORM))))
          (lambda (form rename compare)
-           (cond ((unnamed-let? form rename compare)
+           (cond ((unnamed-let? (cdr form) rename compare)
                   (let ((bindings (cadr form))
                         (body (cddr form)))
                     (let ((variables (map car bindings))
                           (initializers (map cadr bindings)))
                       `((,(rename 'LAMBDA) ,variables ,@body)
                         ,@initializers))))
-                 ((named-let? form rename compare)
+                 ((named-let? (cdr form) rename compare)
                   (let ((name (cadr form))
                         (bindings (caddr form))
                         (body (cdddr form)))
@@ -436,7 +415,7 @@
      (define-transformer '(LETREC (* (@ "LETREC binding" (NAME EXPRESSION)))
                             + FORM)
        (lambda (form rename compare)
-         compare
+         compare                        ;ignore
          (let ((bindings (cadr form))
                (body (cddr form)))
            `(,(rename 'LET) ()
@@ -449,16 +428,18 @@
                 ,@body))))
        '(DEFINE LET)))))
 
-(define (standard-derived-syntax-macrology)
-  (make-standard-transformer-macrology
+;;;; Standard Derived Syntax
+
+(define (macrology/standard-boolean-connectives)
+  (make-extended-er-macro-transformer-macrology
    (lambda (define-transformer)
 
-     (define (boolean-reduction null-case binary-case)
+     (define (boolean-reduction identity binary-case)
        (lambda (form rename compare)
          compare                        ;ignore
          (let ((operands (cdr form)))
            (cond ((not (pair? operands))
-                  (null-case rename))
+                  identity)
                  ((not (pair? (cdr operands)))
                   (car operands))
                  (else
@@ -466,25 +447,24 @@
                                (car operands)
                                `(,(car form) ,@(cdr operands))))))))
 
+     (define-transformer '(AND * EXPRESSION)
+       (boolean-reduction '#T
+                          (lambda (rename a b)
+                            `(,(rename 'IF) ,a ,b #F)))
+       '(IF))
+
      (define-transformer '(OR * EXPRESSION)
-       (boolean-reduction (lambda (rename)
-                            rename      ;ignore
-                            '#F)
+       (boolean-reduction '#F
                           (lambda (rename a b)
                             `(,(rename 'LET) ((,(rename 'T) ,a))
                                (,(rename 'IF) ,(rename 'T)
                                  ,(rename 'T)
                                  ,b))))
-       '(LET IF))
+       '(LET IF)))))
 
-     (define-transformer '(AND * EXPRESSION)
-       (boolean-reduction (lambda (rename)
-                            rename      ;ignore
-                            '#T)
-                          (lambda (rename a b)
-                            `(,(rename 'IF) ,a ,b #F)))
-       '(IF))
-
+(define (macrology/standard-iteration)
+  (make-extended-er-macro-transformer-macrology
+   (lambda (define-transformer)
      (define-transformer
          '(DO (* (@ "DO variable clause" (NAME EXPRESSION ? EXPRESSION)))
               (@ "DO return clause" (EXPRESSION ? EXPRESSION))
@@ -511,8 +491,14 @@
                   (,(rename 'BEGIN)
                     ,@body
                     (,(rename 'DO-LOOP) ,@loop-updates)))))))
-       '(BEGIN IF LET))
+       '(BEGIN IF LET)))))
 
+;;;;; Standard Derived Conditional Syntax: COND & CASE
+
+(define (macrology/standard-derived-conditional)
+  (make-extended-er-macro-transformer-macrology
+   (lambda (define-transformer)
+
      ;;; This supports the SRFI 61 extension to `=>' clauses.
 
      (define-transformer '(COND + (@ "COND clause" (+ EXPRESSION)))
@@ -572,6 +558,8 @@
                                ,@(maybe-more)))))))))))
        '(APPLY BEGIN IF LET OR))
 
+     ;;; (DEFINE (MACROLOGY/STANDARD-DERIVED-CONDITIONAL) ...), continued
+
      (define-transformer '(CASE EXPRESSION + (@ "CASE clause" (+ EXPRESSION)))
        (let ((else-clause? (pattern-predicate '('ELSE + EXPRESSION)))
              (case-clause? (pattern-predicate '((* DATUM) + EXPRESSION))))
@@ -603,6 +591,7 @@
                                                `(,(rename 'EQV?)
                                                  ,(rename 'KEY)
                                                  (,(rename 'QUOTE) ,datum)))))
+                                        ;; Gratuitous optimization...
                                         (cond ((not (pair? data))
                                                '#F)
                                               ((not (pair? (cdr data)))
@@ -618,25 +607,48 @@
                                             clause))))))))))
        '(BEGIN EQV? IF LET QUOTE)))))
 
-(define (non-standard-syntax-macrology)
-  (make-extended-macrology
-   (lambda (define-classifier define-expression-compiler define-transformer)
-     define-transformer                 ;ignore
+;;;; Non-Standard Primitive Syntax
 
-     (define-expression-compiler '(SYNTAX-QUOTE DATUM)
+;;; The name of the form for the variant of QUOTE that does not strip
+;;; syntax is not standard; there is not even a de facto standard.
+;;; Scheme48 calls it CODE-QUOTE; MIT Scheme calls it SYNTAX-QUOTE.
+;;; We therefore allow the name to be supplied.
+
+(define (macrology/syntax-quote name compiler)
+  (make-expression-compiler-macrology
+   (lambda (define-expression-compiler)
+     (define-expression-compiler `(,name DATUM)
        (lambda (form environment history)
-         ((quotation-compiler environment) (cadr form) history)))
+         environment                    ;ignore
+         (compiler (cadr form) history))))))
+
+;;; It might be a good idea to allow the name of this to be supplied
+;;; as well: Larceny, and Clinger's original paper on the system, uses
+;;; TRANSFORMER, whereas MIT Scheme uses ER-MACRO-TRANSFORMER.  On the
+;;; other hand, (DEFINE-SYNTAX TRANSFORMER ER-MACRO-TRANSFORMER) would
+;;; work perfectly well anyway.
+
+(define (macrology/er-macro-transformer)
+  (make-extended-classifier-macrology
+   (lambda (define-classifier)
+
+     (define (name-list? object)
+       (if (pair? object)
+           (and (name? (car object))
+                (name-list? (cdr object)))
+           (null? object)))
 
      (define-classifier '(ER-MACRO-TRANSFORMER EXPRESSION ? (* NAME))
        (lambda (form environment history)
-         (define (finish procedure auxiliary-names)
-           (values (make-keyword form
-                                 (make-transformer environment
-                                                   auxiliary-names
-                                                   procedure
-                                                   form))
-                   history))
-         (let ((expression (cadr form))
+         (let ((finish
+                (lambda (procedure auxiliary-names)
+                  (values (make-keyword form
+                                        (make-transformer environment
+                                                          auxiliary-names
+                                                          procedure
+                                                          form))
+                          history)))
+               (expression (cadr form))
                (auxiliary-names (if (pair? (cddr form)) (caddr form) #f)))
            (let ((mumble (meta-evaluate expression environment)))
              (cond ((procedure? mumble)
@@ -645,18 +657,12 @@
                          (procedure? (car mumble))
                          (name-list? (cdr mumble)))
                     (if auxiliary-names
-                        (syntax-error "Multiple auxiliary name lists:"
-                                      history
-                                      (cdr mumble)
-                                      auxiliary-names)
+                        (classify-error "Multiple auxiliary name lists:"
+                                        history
+                                        (cdr mumble)
+                                        auxiliary-names)
                         (finish (car mumble) (cdr mumble))))
                    (else
-                    (syntax-error "Invalid transformer procedure:"
-                                  history
-                                  mumble))))))))))
-
-(define (name-list? object)
-  (if (pair? object)
-      (and (name? (car object))
-           (name-list? (cdr object)))
-      (null? object)))
+                    (classify-error "Invalid transformer procedure:"
+                                    history
+                                    mumble))))))))))

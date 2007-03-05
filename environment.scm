@@ -128,18 +128,6 @@
 (define (self-evaluating? datum environment)
   ((syntactic-parameter environment self-evaluating?) datum))
 
-(define (quotation-compiler environment)
-  (syntactic-parameter environment quotation-compiler))
-
-(define (conditional-compiler environment)
-  (syntactic-parameter environment conditional-compiler))
-
-(define (lambda-bvl-mapper environment)
-  (syntactic-parameter environment lambda-bvl-mapper))
-
-(define (lambda-compiler environment)
-  (syntactic-parameter environment lambda-compiler))
-
 (define (meta-evaluator environment)
   (syntactic-parameter environment meta-evaluator))
 
@@ -156,10 +144,14 @@
     environment                         ;ignore
     (values)))
 
-(define (make-macrology procedure)
+(define (make-classifier-macrology receiver)
   (lambda (environment)
     (define (define-classifier name procedure)
       (syntactic-bind! environment name (make-classifier name procedure)))
+    (receiver define-classifier)))
+
+(define (make-er-macro-transformer-macrology receiver)
+  (lambda (environment)
     (define (define-transformer name procedure auxiliary-names)
       (syntactic-bind! environment
                        name
@@ -168,19 +160,7 @@
                                          procedure
                                          ;; No source record.
                                          #f)))
-    (procedure define-classifier define-transformer)))
-
-(define (make-classifier-macrology procedure)
-  (make-macrology
-   (lambda (define-classifier define-transformer)
-     define-transformer                 ;ignore
-     (procedure define-classifier))))
-
-(define (make-transformer-macrology procedure)
-  (make-macrology
-   (lambda (define-classifier define-transformer)
-     define-classifier                  ;ignore
-     (procedure define-transformer))))
+    (receiver define-transformer)))
 
 (define (compose-macrologies . macrologies)
   (compose-macrology-list macrologies))
