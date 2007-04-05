@@ -34,6 +34,7 @@
     macrology/standard-iteration
     macrology/standard-derived-conditional
     macrology/standard-variable-binding
+    macrology/standard-quasiquote
 
     ;; Non-standard syntactic extensions
     macrology/er-macro-transformer
