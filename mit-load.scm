@@ -55,6 +55,13 @@
 (define (hook/reclassify form history)
   form history                          ;ignore
   (error "Classifier not yet available."))
+
+;;; MIT Scheme is not quite R5RS-compliant in the area of EVAL
+;;; environment specifiers.  This wouldn't be hard to fix, but no one
+;;; has done it.  (Then again, INTERACTION-ENVIRONMENT is optional.)
+
+(define (interaction-environment)
+  (nearest-repl/environment))
 
 (with-working-directory-pathname
     (directory-pathname (current-load-pathname))
