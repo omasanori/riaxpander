@@ -57,12 +57,11 @@
    (macrology/standard-conditional sexp/compile-conditional)
    (macrology/standard-definition)
    (macrology/standard-derived-syntax)
+   (macrology/standard-keyword-definition)
    (macrology/standard-lambda sexp/compile-lambda sexp/map-lambda-bvl)
    (macrology/standard-quotation sexp/compile-quotation)
    (macrology/standard-sequence)
-   (macrology/standard-syntactic-binding)
-   ;; Add on SYNTAX-QUOTE, ER-MACRO-TRANSFORMER, &c.
-   ))
+   (macrology/standard-syntactic-binding)))
 
 (define sexp/syntactic-operations
   (let ()
