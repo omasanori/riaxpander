@@ -10,6 +10,22 @@
 ;;; This system requires that Chicken be set into case-insensitive
 ;;; mode.  To load the system, simply (compile and) load this file.
 
+(declare
+  (export
+    exrename:install
+    ##sys#compiler-toplevel-macroexpand-hook
+    ##sys#interpreter-toplevel-macroexpand-hook
+    macroexpand
+    name?
+    name/original-symbol
+    name->symbol
+    ;++ more exports
+    ))
+
+(define (syntax-error message history . irritants)
+  history                               ;ignore
+  (apply ##sys#syntax-error-hook message irritants))
+
 (define classify-error syntax-error)
 
 (use srfi-1)                            ;list-lib
