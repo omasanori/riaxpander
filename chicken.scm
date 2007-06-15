@@ -21,7 +21,8 @@
 (include "taxonomy")
 (include "classify")
 (include "standard")
-
+(include "synrules")
+
 (define (exrename:expand form)
   (set! *alias-uid* 0)
   ((lambda (results)
@@ -54,8 +55,11 @@
           (exrename:expand expression))))
 
 (define (chicken/meta-evaluate expression environment)
-  environment                           ;ignore
-  ((##sys#eval-handler) expression))
+  ((##sys#eval-handler)
+   (receive (expression history)
+            (classify-expression expression environment #f)
+     history                            ;ignore
+     (chicken/compile-expression expression))))
 
 (define (chicken/reduce-name name environment)
   (let loop ((name name))
@@ -151,8 +155,7 @@
    (macrology/standard-quotation chicken/compile-quotation)
    (macrology/standard-sequence)
    (macrology/standard-syntactic-binding)
-   (macrology/er-macro-transformer)
-   (macrology/syntax-quote 'QUOTE chicken/compile-quotation)
+   (macrology/syntax-rules)
    (chicken-extensions-macrology)))
 
 (define chicken/syntactic-operations
