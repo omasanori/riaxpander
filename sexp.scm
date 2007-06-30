@@ -6,10 +6,10 @@
 ;;; This code is written by Taylor R. Campbell and placed in the Public
 ;;; Domain.  All warranties are disclaimed.
 
-(define (sexp/expand form)
-  (sexp/expand* (list form)))
+(define (sexp/expand form environment)
+  (sexp/expand* (list form) environment))
 
-(define (sexp/expand* forms)
+(define (sexp/expand* forms environment)
   ((lambda (results)
      (if (and (pair? results)
               (null? (cdr results)))
@@ -19,11 +19,10 @@
           (cond ((binding? item) (sexp/compile-binding item))
                 ((expression? item) (sexp/compile-expression item))
                 (else (error "Invalid item in output:" item))))
-        (let ((environment (make-sexp-environment)))
-          (scan-top-level identity-selector
-                          forms
-                          environment
-                          (make-top-level-history forms environment))))))
+        (scan-top-level identity-selector
+                        forms
+                        environment
+                        (make-top-level-history forms environment)))))
 
 (define (sexp/meta-evaluate expression environment)
   ;; ENVIRONMENT is a syntactic environment, not an R5RS environment
