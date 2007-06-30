@@ -80,7 +80,8 @@
 (define (chicken/reduce-name name environment)
   (let loop ((name name))
     (if (alias? name)
-        (if (name=? environment name environment (alias/name name))
+        (if (name=? environment name
+                    exrename:top-level-environment (alias/name name))
             (loop (alias/name name))
             (name->symbol name))
         name)))
