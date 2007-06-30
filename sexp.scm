@@ -28,8 +28,7 @@
   ;; ENVIRONMENT is a syntactic environment, not an R5RS environment
   ;; specifier (or `evaluation environment', perhaps), and is
   ;; therefore unsuitable as an argument to EVAL.
-  environment                           ;ignore
-  (eval expression (interaction-environment)))
+  (eval (sexp/expand expression environment) (interaction-environment)))
 
 (define (sexp/reduce-name name environment)
   (let loop ((name name))
