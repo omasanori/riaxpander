@@ -31,12 +31,21 @@
   (eval (sexp/expand expression environment) (interaction-environment)))
 
 (define (sexp/reduce-name name environment)
-  (let loop ((name name))
-    (if (alias? name)
-        (if (name=? environment name environment (alias/name name))
-            (loop (alias/name name))
-            name)
-        name)))
+  ;++ This is a kludge.  The effect is to generate clean names from
+  ;++ aliases for names that are bound in top-level environments, and
+  ;++ to leave local variables ugly.
+  (let ((environment*
+         (let loop ((environment environment))
+           (if (eq? sexp/syntactic-operations
+                    (syntactic-environment/operations environment))
+               environment
+               (loop (syntactic-environment/parent environment))))))
+    (let loop ((name name))
+      (if (alias? name)
+          (if (name=? environment name environment* (alias/name name))
+              (loop (alias/name name))
+              (name->symbol name))
+          name))))
 
 ;;;; S-Expression Syntactic Environment
 
