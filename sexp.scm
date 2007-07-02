@@ -126,8 +126,8 @@
       (number? datum)
       (string? datum)))
 
-(define (sexp/classify-variable name location environment history)
-  name                                  ;ignore
+(define (sexp/classify-variable name location reference environment history)
+  name reference                        ;ignore
   (sexp/make-variable-location location environment history))
 
 (define (sexp/classify-free-variable name environment history)
