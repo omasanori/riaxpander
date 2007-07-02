@@ -39,6 +39,7 @@
                      ((variable-classifier environment)
                       (variable/name denotation)
                       (variable/location denotation)
+                      name
                       environment
                       history))
                     ((or (classifier? denotation)
