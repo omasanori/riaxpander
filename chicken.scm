@@ -287,8 +287,8 @@
       (string? datum)
       (eof-object? datum)))
 
-(define (chicken/classify-variable name location environment history)
-  name                                  ;ignore
+(define (chicken/classify-variable name location reference environment history)
+  name reference                        ;ignore
   (chicken/make-variable-location location environment history))
 
 (define (chicken/classify-free-variable name environment history)
