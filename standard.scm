@@ -303,6 +303,7 @@
      (define-transformer pattern
        (let ((definition-operator (make-definition-operator make-definition)))
          (lambda (form rename compare)
+           compare                      ;ignore
            (if (name? (cadr form))
                (let ((name (cadr form))
                      (expression (caddr form)))
