@@ -65,7 +65,8 @@
     scan-expressions
     scan-definitions
     scan-top-level
-    scan-body
+    scan-r5rs-body
+    scan-r6rs-body
     make-variable-definition
     make-keyword-definition
     make-overloaded-definition
