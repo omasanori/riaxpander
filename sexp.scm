@@ -186,7 +186,7 @@
 
 (define (sexp/compile-lambda-body body)
   (receive (bindings expressions)
-           (classify/sequence scan-body body)
+           (classify/sequence scan-r5rs-body body)
     `(,@(map sexp/compile-binding bindings)
       ,@(map sexp/compile-expression expressions))))
 
