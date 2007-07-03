@@ -36,10 +36,9 @@
   ;++ to leave local variables ugly.
   (let ((environment*
          (let loop ((environment environment))
-           (if (eq? sexp/syntactic-operations
-                    (syntactic-environment/operations environment))
-               environment
-               (loop (syntactic-environment/parent environment))))))
+           (cond ((syntactic-environment/parent environment)
+                  => loop)
+                 (else environment)))))
     (let loop ((name name))
       (if (alias? name)
           (if (name=? environment name environment* (alias/name name))
