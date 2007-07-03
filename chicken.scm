@@ -358,7 +358,7 @@
      ,@(chicken/compile-lambda-body body)))
 
 (define (chicken/compile-lambda-body body)
-  (receive (definitions expressions) (classify/sequence scan-body body)
+  (receive (definitions expressions) (classify/sequence scan-r6rs-body body)
     `(,@(map (lambda (item)
                (cond ((binding? item) (chicken/compile-binding item))
                      ((declaration? item) (chicken/compile-declaration item))
