@@ -10,6 +10,7 @@
   (export
     sexp/expand
     sexp/expand*
+    make-sexp-environment
     ))
 
 (define-interface syntactic-standard-macrology-interface
