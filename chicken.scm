@@ -13,6 +13,8 @@
 (declare
   (export
     exrename:install
+    exrename:expand
+    exrename:expand-toplevel
     ##sys#compiler-toplevel-macroexpand-hook
     ##sys#interpreter-toplevel-macroexpand-hook
     macroexpand
@@ -39,7 +41,7 @@
 (include "standard")
 (include "synrules")
 
-(define (exrename:expand form)
+(define (exrename:expand form environment)
   (set! *alias-uid* 0)
   ((lambda (results)
      (if (and (pair? results)
@@ -51,31 +53,31 @@
                 ((declaration? item) (chicken/compile-declaration item))
                 ((expression? item) (chicken/compile-expression item))
                 (else (error "Invalid top-level item:" item))))
-        (let ((forms (list form))
-              (environment
-               (or exrename:top-level-environment (make-chicken-environment))))
+        (let ((forms (list form)))
           (scan-top-level identity-selector
                           forms
                           environment
                           (make-top-level-history forms environment))))))
 
+(define (exrename:expand-toplevel form)
+  (exrename:expand form
+                   (or exrename:top-level-environment
+                       (make-chicken-environment))))
+
 (define exrename:top-level-environment #f)
 
 (define (exrename:install)
   (set! exrename:top-level-environment (make-chicken-environment))
-  (set! ##sys#compiler-toplevel-macroexpand-hook exrename:expand)
-  (set! ##sys#interpreter-toplevel-macroexpand-hook exrename:expand)
+  (set! ##sys#compiler-toplevel-macroexpand-hook exrename:expand-toplevel)
+  (set! ##sys#interpreter-toplevel-macroexpand-hook exrename:expand-toplevel)
   (set! macroexpand
         (lambda (expression . macro-environment)
           macro-environment             ;ignore -- Chicken unhygienic macros
-          (exrename:expand expression))))
+          (exrename:expand-toplevel expression))))
 
 (define (chicken/meta-evaluate expression environment)
   ((##sys#eval-handler)
-   (receive (expression history)
-            (classify-expression expression environment #f)
-     history                            ;ignore
-     (chicken/compile-expression expression))))
+   (exrename:expand expression environment)))
 
 (define (chicken/reduce-name name environment)
   (let loop ((name name))
