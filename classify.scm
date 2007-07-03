@@ -299,14 +299,17 @@
                                 scan-definition
                                 "Non-definition in definition sequence:"))
 
-;;;;; Internal Definitions, not so horrible, actually
+;;;;; R5RS Internal Definitions
 
-(define (scan-body selector forms environment history)
+;++ This should report better errors about bodies with no expressions.
+
+(define (scan-r5rs-body selector forms environment history)
   (let loop ((selector selector) (forms forms) (bindings '()))
-    (define (finish expressions)
-      (values (reverse bindings) expressions))
     (if (pair? forms)
-        ((scan-body-form (select-car selector) (car forms) environment history)
+        ((scan-r5rs-body-form (select-car selector)
+                              (car forms)
+                              environment
+                              history)
          (lambda ()                     ;if-empty
            (loop (select-cdr selector) (cdr forms) bindings))
          (lambda (bindings*)            ;if-definitions
@@ -314,21 +317,22 @@
                  (cdr forms)
                  (append-reverse bindings* bindings)))
          (lambda (expressions)          ;if-expressions
-           (finish (append expressions
+           (values (reverse bindings)
+                   (append expressions
                            (scan-expressions (select-cdr selector)
                                              (cdr forms)
                                              environment
                                              history)))))
-        (finish '()))))
+        (error "Body sequence contains no expressions!" history))))
 
-(define (scan-body-form selector form environment history)
+(define (scan-r5rs-body-form selector form environment history)
   (lambda (if-empty if-definitions if-expressions)
     (let loop ((classifier
                 (lambda ()
                   (classify-subform selector form environment history))))
       (receive (classification history) (classifier)
         (cond ((sequence? classification)
-               ((classify/sequence scan-subsequence classification)
+               ((classify/sequence scan-r5rs-subsequence classification)
                 if-empty if-definitions if-expressions))
               ((definition? classification)
                (if-definitions (scan-definition classification environment)))
@@ -340,16 +344,16 @@
                                        history
                                        classification)))))))))
 
-(define (scan-subsequence selector forms environment history)
+(define (scan-r5rs-subsequence selector forms environment history)
   (lambda (if-empty if-definitions if-expressions)
     (let loop ((selector selector) (forms forms))
       (define (scan scanner)
         (scanner (select-cdr selector) (cdr forms) environment history))
       (if (pair? forms)
-          ((scan-body-form (select-car selector)
-                           (car forms)
-                           environment
-                           history)
+          ((scan-r5rs-body-form (select-car selector)
+                                (car forms)
+                                environment
+                                history)
            (lambda ()
              (loop (select-cdr selector) (cdr forms)))
            (lambda (definitions)
@@ -357,6 +361,58 @@
            (lambda (expressions)
              (if-expressions (append expressions (scan scan-expressions)))))
           (if-empty)))))
+
+;;;;; R6RS Internal Definitions
+
+;;; The difference between R5RS bodies and R6RS bodies is whether the
+;;; boundary between expressions and definitions may occur within an
+;;; internal sequence.  The R5RS forbids (BEGIN <definition> ...
+;;; <expression> ...), whereas the R6RS permits it.
+
+(define (scan-r6rs-body selector forms environment history)
+  (receive (bindings expressions)
+      (scan-r6rs-subsequence selector forms environment history)
+    (if (pair? expressions)
+        (values bindings expressions)
+        (error "Body sequence contains no expressions!" history))))
+
+(define (scan-r6rs-subsequence selector forms environment history)
+  (let loop ((selector selector) (forms forms) (bindings '()))
+    (if (pair? forms)
+        (receive (bindings* expressions)
+            (scan-r6rs-body-form (select-car selector)
+                                 (car forms)
+                                 environment
+                                 history)
+          (let ((bindings** (append-reverse bindings* bindings)))
+            (if (pair? expressions)
+                (values (reverse bindings**)
+                        (append expressions
+                                (scan-expressions (select-cdr selector)
+                                                  (cdr forms)
+                                                  environment
+                                                  history)))
+                (loop (select-cdr selector)
+                      (cdr forms)
+                      bindings**))))
+        (values (reverse bindings) '()))))
+
+(define (scan-r6rs-body-form selector form environment history)
+  (let loop ((classifier
+              (lambda ()
+                (classify-subform selector form environment history))))
+    (receive (classification history) (classifier)
+      (cond ((sequence? classification)
+             (classify/sequence scan-r6rs-subsequence classification))
+            ((definition? classification)
+             (values (scan-definition classification environment) '()))
+            ((expression? classification)
+             (values '() (scan-expression classification environment)))
+            (else
+             (loop (lambda ()
+                       (classify-error "Invalid sequence element:"
+                                       history
+                                       classification))))))))
 
 ;;;; Definitions
 
