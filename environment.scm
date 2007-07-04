@@ -381,7 +381,7 @@
      (lambda (environment name)         ;lookup
        (syntactic-lookup (choose-parent environment name) name))
      (lambda (environment name denotation) ;bind!
-       (syntactic-bind! (choose-parent environment) name denotation))
+       (syntactic-bind! (choose-parent environment name) name denotation))
      (lambda (environment)              ;seal!
        environment ;ignore
        (if #f #f))
