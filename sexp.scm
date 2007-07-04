@@ -77,8 +77,11 @@
    (macrology/standard-lambda sexp/compile-lambda sexp/map-lambda-bvl)
    (macrology/standard-quotation sexp/compile-quotation)
    (macrology/standard-sequence)
-   (macrology/standard-syntactic-binding)))
-
+   (macrology/standard-syntactic-binding)
+   (macrology/syntax-quote 'SYNTAX-QUOTE sexp/compile-quotation)
+   (macrology/non-standard-macro-transformers)
+   (macrology/syntax-rules)))
+
 (define sexp/syntactic-operations
   (let ()
     (define (global-bindings environment)
