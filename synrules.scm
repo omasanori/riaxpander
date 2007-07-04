@@ -26,7 +26,7 @@
 ; The syntax-rules macro (new in R5RS)
 
 ;;; [Hacked slightly by Taylor R. Campbell to make it work in his
-;;; macro expander `rex'.]
+;;; macro expander `riaxpander'.]
 
 ; Example:
 ;
