@@ -274,7 +274,7 @@
     (lambda (define-classifier)
       (define-classifier '(DECLARE + (NAME * DATUM))
         (lambda (form environment history)
-          (values (make-declaration-definition cdr-selctor
+          (values (make-declaration-definition cdr-selector
                                                (cdr form)
                                                environment
                                                history)
