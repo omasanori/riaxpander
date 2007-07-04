@@ -76,6 +76,7 @@
                 "taxonomy"
                 "classify"
                 "standard"
+                "synrules"
                 ;; For now, we just use S-expression output.  Later
                 ;; there ought to be an scode generator.
                 "sexp"

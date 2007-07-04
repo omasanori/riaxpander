@@ -23,10 +23,13 @@
    ("standard"
     "history" "name" "denotation" "environment"
     "transform" "taxonomy" "classify")
-   ("sexp"
+   ("synrules"
     "history" "name" "denotation" "environment"
     "transform" "taxonomy" "classify" "standard")
+   ("sexp"
+    "history" "name" "denotation" "environment"
+    "transform" "taxonomy" "classify" "standard" "synrules")
    ("mit-load"
     "history" "name" "denotation" "environment"
-    "transform" "taxonomy" "classify" "standard" "sexp")
+    "transform" "taxonomy" "classify" "standard" "synrules" "sexp")
    ))
