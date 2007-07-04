@@ -91,7 +91,7 @@
          (string->symbol
           (string-append (symbol->string (name->symbol name))
                          "#"
-                         (number->string location #d10))))
+                         (number->string location))))
         ((name? location)
          ;** Note that this strips the information necessary to
          ;** resolve hygienic module references later.
