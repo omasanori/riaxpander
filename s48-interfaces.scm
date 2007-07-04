@@ -37,6 +37,9 @@
     macrology/standard-variable-binding
     macrology/standard-quasiquote
 
+    ;; Pattern language
+    macrology/syntax-rules
+
     ;; Non-standard syntactic extensions
     macrology/non-standard-macro-transformers
     macrology/syntax-quote

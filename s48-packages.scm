@@ -35,7 +35,7 @@
         syntactic-errors
         )
   (optimize auto-integrate)
-  (files standard))
+  (files standard synrules))
 
 (define-structure syntactic-classifier syntactic-classifier-interface
   (open scheme
