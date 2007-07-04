@@ -14,22 +14,22 @@
    ("history")
    ("closure")
    ("denotation")
-   ("environment" "name" "denotation")
-   ("transform" "name" "denotation" "environment")
+   ("environment" "name" "closure" "denotation")
+   ("transform" "name" "closure" "denotation" "environment")
    ("taxonomy")
    ("classify"
-    "history" "name" "denotation" "environment"
+    "history" "name" "closure" "denotation" "environment"
     "transform" "taxonomy")
    ("standard"
-    "history" "name" "denotation" "environment"
+    "history" "name" "closure" "denotation" "environment"
     "transform" "taxonomy" "classify")
    ("synrules"
-    "history" "name" "denotation" "environment"
+    "history" "name" "closure" "denotation" "environment"
     "transform" "taxonomy" "classify" "standard")
    ("sexp"
-    "history" "name" "denotation" "environment"
+    "history" "name" "closure" "denotation" "environment"
     "transform" "taxonomy" "classify" "standard" "synrules")
    ("mit-load"
-    "history" "name" "denotation" "environment"
+    "history" "name" "closure" "denotation" "environment"
     "transform" "taxonomy" "classify" "standard" "synrules" "sexp")
    ))
