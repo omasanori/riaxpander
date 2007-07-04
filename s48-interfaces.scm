@@ -38,7 +38,7 @@
     macrology/standard-quasiquote
 
     ;; Non-standard syntactic extensions
-    macrology/er-macro-transformer
+    macrology/non-standard-macro-transformers
     macrology/syntax-quote
     ))
 
@@ -76,6 +76,12 @@
 (define-interface syntactic-transformation-interface
   (export
     apply-transformer
+    make-er-macro-transformer-macrology
+    make-er-macro-transformer-procedure
+    make-rsc-macro-transformer-macrology
+    make-rsc-macro-transformer-procedure
+    make-sc-macro-transformer-macrology
+    make-sc-macro-transformer-procedure
     make-alias-generator
     make-name-comparator
     ))
@@ -135,6 +141,8 @@
 
     null-syntactic-environment
     syntactic-extend
+    syntactic-splicing-extend
+    syntactic-transformer-extend
     syntactic-filter
 
     syntactic-parameter
@@ -146,19 +154,22 @@
     for-each-syntactic-binding
     bind-variable!
     name=?
+    symbol->name
+    datum->syntax
 
     variable-classifier
     free-variable-classifier
     datum-classifier
     combination-classifier
     self-evaluating?
+    location-allocator
     meta-evaluator
     meta-evaluate
 
     apply-macrology
     null-macrology
     make-classifier-macrology
-    make-er-macro-transformer-macrology
+    transformer-macrology-maker
     compose-macrologies
     ))
 
@@ -187,24 +198,21 @@
     variable/location
     ))
 
-(define-interface syntactic-names-interface
+(define-interface syntactic-closures-interface
   (export
-    <alias>
-    make-alias
-    generate-alias
-    alias?
-    alias/name
-    alias/token
-    alias/environment
-    alias/introducer
-    alias/uid
-
+    <syntactic-closure>
+    syntactic-closure?
+    syntactic-closure/environment
+    syntactic-closure/free-names
+    syntactic-closure/form
+    make-syntactic-closure
+    make-syntactic-closures
+    close-syntax
+    close-syntax*
     name?
-    make-alias-token
+    alias?
     name->symbol
-    name/original-symbol
-    strip-syntax
-    strip-syntax*
+    syntax->datum
     ))
 
 (define-interface syntactic-history-interface

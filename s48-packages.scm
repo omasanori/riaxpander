@@ -14,7 +14,7 @@
         syntactic-taxonomy
         syntactic-environments
         syntactic-denotations
-        syntactic-names
+        syntactic-closures
         syntactic-history
         syntactic-errors
         )
@@ -30,7 +30,7 @@
         syntactic-taxonomy
         syntactic-environments
         syntactic-denotations
-        syntactic-names
+        syntactic-closures
         syntactic-history
         syntactic-errors
         )
@@ -44,7 +44,7 @@
         syntactic-taxonomy
         syntactic-environments
         syntactic-denotations
-        syntactic-names
+        syntactic-closures
         syntactic-history
         syntactic-errors
         )
@@ -70,7 +70,7 @@
   (open scheme
         syntactic-environments
         syntactic-denotations
-        syntactic-names
+        syntactic-closures
         )
   (optimize auto-integrate)
   (files transform))
@@ -86,7 +86,7 @@
   (open scheme
         srfi-9+                         ;define-record-type
         syntactic-denotations
-        syntactic-names
+        syntactic-closures
         syntactic-errors
         )
   (optimize auto-integrate)
@@ -130,19 +130,13 @@
               (variable/name variable)
               (variable/location variable))))))
 
-(define-structure syntactic-names syntactic-names-interface
+(define-structure syntactic-closures syntactic-closures-interface
   (open scheme
         srfi-9+                         ;define-record-type
+        srfi-23                         ;error
         )
   (optimize auto-integrate)
-  (files name)
-  (begin
-    (define-record-discloser <alias>
-      (lambda (alias)
-        (list 'ALIAS
-              (alias/name alias)
-              (alias/introducer alias)
-              (alias/uid alias))))))
+  (files closure))
 
 (define-structure syntactic-history syntactic-history-interface
   (open scheme)
