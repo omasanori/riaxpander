@@ -62,6 +62,13 @@
   ((syntactic-operations/bind! (syntactic-environment/operations environment))
    environment name denotation))
 
+;;; `Sealing' changes the state of the environment to indicate that no
+;;; further changes will be made to it.  In the case of splicing
+;;; environments, this means that all new bindings will be made in the
+;;; parent; in the case of extended environments, this means that the
+;;; local variables can be converted into a better representation for
+;;; fast lookup.
+
 (define (syntactic-seal! environment)
   ((syntactic-operations/seal! (syntactic-environment/operations environment))
    environment))
@@ -84,7 +91,7 @@
            => walk))))
 
 (define (bind-variable! name environment)
-  (let ((variable (make-variable name (syntactic-alias environment name))))
+  (let ((variable (make-variable name (allocate-location environment name))))
     (syntactic-bind! environment name variable)
     variable))
 
@@ -94,9 +101,21 @@
     (cond ((and denotation-a denotation-b)
            (denotation=? denotation-a denotation-b))
           ((and (not denotation-a) (not denotation-b))
-           (eq? (name/original-symbol name-a)
-                (name/original-symbol name-b)))
+           (eq? (name->symbol name-a)
+                (name->symbol name-b)))
           (else #f))))
+
+(define (symbol->name transformer-reference name)
+  (if (syntactic-closure? transformer-reference)
+      (syntactic-alias (syntactic-closure/environment transformer-reference)
+                       name)
+      name))
+
+(define (datum->syntax transformer-reference datum)
+  (let recur ((datum datum))
+    (cond ((pair? datum) (cons (recur (car datum)) (recur (cdr datum))))
+          ((name? datum) (symbol->name transformer-reference datum))
+          (else datum))))
 
 ;;;; Syntactic Parameters
 
@@ -128,6 +147,12 @@
 (define (self-evaluating? datum environment)
   ((syntactic-parameter environment self-evaluating?) datum))
 
+(define (location-allocator environment)
+  (syntactic-parameter environment location-allocator))
+
+(define (allocate-location environment name)
+  ((location-allocator environment) environment name))
+
 (define (meta-evaluator environment)
   (syntactic-parameter environment meta-evaluator))
 
@@ -150,17 +175,21 @@
       (syntactic-bind! environment name (make-classifier name procedure)))
     (receiver define-classifier)))
 
-(define (make-er-macro-transformer-macrology receiver)
-  (lambda (environment)
-    (define (define-transformer name procedure auxiliary-names)
-      (syntactic-bind! environment
-                       name
-                       (make-transformer environment
-                                         auxiliary-names
-                                         procedure
-                                         ;; No source record.
-                                         #f)))
-    (receiver define-transformer)))
+(define (transformer-macrology-maker map-procedure)
+  (lambda (receiver)
+    (lambda (environment)
+      (define (define-transformer name procedure auxiliary-names)
+        (syntactic-bind! environment
+                         name
+                         (make-transformer environment
+                                           auxiliary-names
+                                           (map-procedure procedure)
+                                           ;; No source record.
+                                           #f)))
+      (receiver define-transformer))))
+
+(define make-transformer-macrology
+  (transformer-macrology-maker (lambda (procedure) procedure)))
 
 (define (compose-macrologies . macrologies)
   (compose-macrology-list macrologies))
@@ -175,20 +204,21 @@
 
 ;;;; Extended Environments
 
+;;; Extended environments are simply frames in the environment tree
+;;; in which local bindings can be introduced.
+
 (define (syntactic-extend environment)
   (make-syntactic-environment extended-syntactic-operations
                               (syntactic-environment/parameters environment)
                               environment
-                              (cons '() (make-alias-token))))
+                              '()))
 
 (define extended-syntactic-operations
   (let ()
     (define (local-bindings environment)
-      (car (syntactic-environment/data environment)))
+      (syntactic-environment/data environment))
     (define (set-local-bindings! environment bindings)
-      (set-car! (syntactic-environment/data environment) bindings))
-    (define (alias-token environment)
-      (cdr (syntactic-environment/data environment)))
+      (set-syntactic-environment/data! environment bindings))
     (make-syntactic-operations
      (lambda (environment name)         ;lookup
        (cond ((assq name (local-bindings environment))
@@ -210,7 +240,7 @@
        environment ;ignore
        (if #f #f))
      (lambda (environment name)         ;alias
-       (make-alias name (alias-token environment) environment #f))
+       (syntactic-alias (syntactic-environment/parent environment) name))
      (lambda (environment)              ;disclose
        `(EXTENDED ,(map car (local-bindings environment))))
      (lambda (environment procedure)    ;for-each-binding
@@ -218,48 +248,151 @@
                    (procedure (car binding) (cdr binding)))
                  (local-bindings environment))))))
 
+;;;; Splicing Environments
+
+;;; These are for implementing LET-SYNTAX and LETREC-SYNTAX.
+
+(define (syntactic-splicing-extend environment)
+  (make-syntactic-environment splicing-syntactic-operations
+                              (syntactic-environment/parameters environment)
+                              environment
+                              (cons #f '())))
+
+(define splicing-syntactic-operations
+  (let ()
+    (define (sealed? environment)
+      (car (syntactic-environment/data environment)))
+    (define (seal! environment)
+      (set-car! (syntactic-environment/data environment) #t))
+    (define (local-bindings environment)
+      (cdr (syntactic-environment/data environment)))
+    (define (set-local-bindings! environment bindings)
+      (set-cdr! (syntactic-environment/data environment) bindings))
+    (make-syntactic-operations
+     (lambda (environment name)         ;lookup
+       (cond ((assq name (local-bindings environment))
+              => cdr)
+             (else
+              (syntactic-lookup (syntactic-environment/parent environment)
+                                name))))
+     (lambda (environment name denotation) ;bind!
+       (cond ((assq name (local-bindings environment))
+              => (lambda (original-binding)
+                   (error "Rebinding name:" environment name denotation
+                          `(was ,(cdr original-binding)))))
+             ((sealed? environment)
+              (syntactic-bind! (syntactic-environment/parent environment)
+                               name
+                               denotation))
+             (else
+              (set-local-bindings! environment
+                                   (cons (cons name denotation)
+                                         (local-bindings environment))))))
+     (lambda (environment)              ;seal!
+       (seal! environment))
+     (lambda (environment name)         ;alias
+       (syntactic-alias (syntactic-environment/parent environment) name))
+     (lambda (environment)              ;disclose
+       `(SPLICING ,(map car (local-bindings environment))))
+     (lambda (environment procedure)    ;for-each-binding
+       (for-each (lambda (binding)
+                   (procedure (car binding) (cdr binding)))
+                 (local-bindings environment))))))
+
+;;;; Transformer Environments
+
+;;; Transformer environments record the name by which a transformer
+;;; was invoked in its site of usage.  This is used to find the origin
+;;; of an alias, which is necessary for program module linkage in the
+;;; presence of hygienic macros.  Transformer environments also record
+;;; a cache for generated aliases.
+
+(define (syntactic-transformer-extend environment transformer-reference)
+  (make-syntactic-environment transformer-syntactic-operations
+                              (syntactic-environment/parameters environment)
+                              environment
+                              (cons '() transformer-reference)))
+
+(define (syntactic-environment/transformer-reference environment)
+  (let loop ((environment environment))
+    (cond ((eq? transformer-syntactic-operations
+                (syntactic-environment/operations environment))
+           (cdr (syntactic-environment/data environment)))
+          ((syntactic-environment/parent environment)
+           => loop)
+          (else #f))))
+
+(define transformer-syntactic-operations
+  (let ()
+    (define (alias-cache environment)
+      (car (syntactic-environment/data environment)))
+    (define (set-alias-cache! environment cache)
+      (set-car! (syntactic-environment/data environment) cache))
+    (define (transformer-reference environment)
+      (cdr (syntactic-environment/data environment)))
+    (make-syntactic-operations
+     (lambda (environment name)         ;lookup
+       (syntactic-lookup (syntactic-environment/parent environment) name))
+     (lambda (environment name denotation) ;bind!
+       (syntactic-bind! (syntactic-environment/parent environment)
+                        name
+                        denotation))
+     (lambda (environment)              ;seal!
+       environment ;ignore
+       (if #f #f))
+     (lambda (environment name)         ;alias
+       (cdr (let ((cache (alias-cache environment)))
+              (or (assq name cache)
+                  (let ((entry (cons name (close-syntax name environment))))
+                    (set-alias-cache! environment (cons entry cache))
+                    entry)))))
+     (lambda (environment)              ;disclose
+       `(TRANSFORMER ,(transformer-reference environment)))
+     (lambda (environment procedure)    ;for-each-binding
+       environment procedure ;ignore
+       (if #f #f)))))
+
 ;;;; Filtered Environments
 
-(define (syntactic-filter default-environment token special-environment)
+;;; Filtered environments are used to classify the form of a syntactic
+;;; closure; they make the free names of syntactic closures work.
+
+(define (syntactic-filter closing-environment free-names free-environment)
   (make-syntactic-environment
    filtered-syntactic-operations
-   (syntactic-environment/parameters default-environment)
-   default-environment
-   (cons special-environment token)))
+   (syntactic-environment/parameters closing-environment)
+   closing-environment
+   (cons free-environment free-names)))
 
 (define filtered-syntactic-operations
   (let ()
-    (define (default-environment environment)
+    (define (closing-environment environment)
       (syntactic-environment/parent environment))
-    (define (special-environment environment)
+    (define (free-environment environment)
       (car (syntactic-environment/data environment)))
-    (define (filter-token environment)
+    (define (free-names environment)
       (cdr (syntactic-environment/data environment)))
     (define (choose-parent environment name)
-      ((if (and (alias? name)
-                (eq? (alias/token name)
-                     (filter-token environment)))
-           special-environment
-           default-environment)
+      ((if (memq name (free-names environment))
+           free-environment
+           closing-environment)
        environment))
     (make-syntactic-operations
      (lambda (environment name)         ;lookup
        (syntactic-lookup (choose-parent environment name) name))
      (lambda (environment name denotation) ;bind!
-       (error "Definitions illegal in filtered environment:"
-              environment name denotation))
+       (syntactic-bind! (choose-parent environment) name denotation))
      (lambda (environment)              ;seal!
        environment ;ignore
        (if #f #f))
      (lambda (environment name)         ;alias
-       ;; I'm not exactly sure what this means...
        (syntactic-alias (choose-parent environment name) name))
      (lambda (environment)              ;disclose
-       `(FILTERED ,(filter-token environment)))
+       `(FILTERED ,(free-names environment)))
      (lambda (environment procedure)    ;for-each-binding
-       (for-each-syntactic-binding (special-environment environment)
-         (let ((token (filter-token environment)))
-           (lambda (name denotation)
-             (if (and (alias? name)
-                      (eq? token (alias/token name)))
-                 (procedure name denotation)))))))))
+       (for-each (let ((environment (free-environment environment)))
+                   (lambda (free-name)
+                     (cond ((syntactic-lookup environment free-name)
+                            => (lambda (denotation)
+                                 (procedure free-name denotation))))))
+                 (free-names environment))))))

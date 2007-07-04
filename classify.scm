@@ -5,12 +5,14 @@
 
 ;;; This code is written by Taylor R. Campbell and placed in the Public
 ;;; Domain.  All warranties are disclaimed.
-
+
 (define (classify form environment history)
   (cond ((pair? form)
          (classify-pair form environment history))
-        ((name? form)
+        ((symbol? form)
          (classify-name form environment history))
+        ((syntactic-closure? form)
+         (classify-syntactic-closure form environment history))
         (else
          ((datum-classifier environment) form environment history))))
 
@@ -50,6 +52,22 @@
                             name environment history)))))
         (else
          ((free-variable-classifier environment) name environment history))))
+
+(define (classify-syntactic-closure form environment history)
+  (let ((form* (syntactic-closure/form form)))
+    (if (name? form*)
+        (classify-name form environment history)
+        ((lambda (environment)
+           (classify form*
+                     environment
+                     (history/replace-reduction history form* environment)))
+         (let ((free-names (syntactic-closure/free-names form))
+               (closing-environment (syntactic-closure/environment form)))
+           (if (pair? free-names)
+               (syntactic-filter closing-environment
+                                 free-names
+                                 environment)
+               closing-environment))))))
 
 (define (classify/keyword keyword form environment history)
   (let ((name (keyword/name keyword))
@@ -66,11 +84,10 @@
   ((classifier/procedure classifier) form environment history))
 
 (define (classify/transformer name transformer form environment history)
-  (receive (form* environment*)
-           (apply-transformer name transformer form environment)
+  (let ((form* (apply-transformer name transformer form environment)))
     (if (eq? form* form)
         (classify-error "Invalid syntax:" history form)
-        (classify-reduction form* environment* history))))
+        (classify-reduction form* environment history))))
 
 (define (classify-combination operator operator-history
                               combination environment history)
@@ -163,12 +180,11 @@
 ;;; expander is finished, since these keywords are entirely anonymous.
 
 (define (keyword-denotation->operator denotation)
-  (generate-alias 'KEYWORD
-                  (let ((environment
-                         (syntactic-extend (null-syntactic-environment #f))))
-                    (syntactic-bind! environment 'KEYWORD denotation)
-                    environment)
-                  #f))                  ;** No introducer to record
+  (close-syntax 'KEYWORD
+                (let ((environment
+                       (syntactic-extend (null-syntactic-environment #f))))
+                  (syntactic-bind! environment 'KEYWORD denotation)
+                  environment)))
 
 (define (classifier->operator procedure)
   (keyword-denotation->operator (make-classifier #f procedure)))

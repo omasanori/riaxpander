@@ -22,15 +22,7 @@
          (let ((predicate (pattern-predicate `(KEYWORD ,@(cdr pattern)))))
            (lambda (form environment history)
              (if (predicate form
-                            (make-alias-generator
-                             (make-alias-token)
-                             environment
-                             ;; Passing the introducer name is not necessary
-                             ;; because we never store the names in any output
-                             ;; that could require later resolution.  (We don't
-                             ;; *have* the name anyway; see CLASSIFY/CLASSIFIER
-                             ;; in classify.scm.)
-                             #f)
+                            (lambda (name) name)
                             (make-name-comparator environment))
                  (procedure form environment history)
                  (classify-error "Invalid syntax:" history form))))))
@@ -252,7 +244,7 @@
   (define-expression-compiler-macrology '(QUOTE DATUM)
     (lambda (form environment history)
       environment                       ;ignore
-      (compiler (strip-syntax (cadr form)) history))))
+      (compiler (syntax->datum (cadr form)) history))))
 
 (define (macrology/standard-sequence)
   (make-extended-classifier-macrology
@@ -349,20 +341,21 @@
              (syntactic-bind! environment
                               (car binding)
                               (keyword/denotation keyword)))))
+       (syntactic-seal! environment)
        (classify-sequence cddr-selector (cddr form) environment history))
 
      (define-classifier '(LET-SYNTAX (* (@ "LET-SYNTAX binding"
                                            (NAME EXPRESSION)))
                            + FORM)
        (lambda (form enclosing-environment history)
-         (let ((environment (syntactic-extend enclosing-environment)))
+         (let ((environment (syntactic-splicing-extend enclosing-environment)))
            (local-syntax form environment enclosing-environment history))))
 
      (define-classifier '(LETREC-SYNTAX (* (@ "LETREC-SYNTAX binding"
                                               (NAME EXPRESSION)))
                            + FORM)
        (lambda (form enclosing-environment history)
-         (let ((environment (syntactic-extend enclosing-environment)))
+         (let ((environment (syntactic-splicing-extend enclosing-environment)))
            (local-syntax form environment environment history)))))))
 
 ;;;; Local Variable Bindings: LET, LET*, & LETREC
@@ -690,13 +683,7 @@
          environment                    ;ignore
          (compiler (cadr form) history))))))
 
-;;; It might be a good idea to allow the name of this to be supplied
-;;; as well: Larceny, and Clinger's original paper on the system, uses
-;;; TRANSFORMER, whereas MIT Scheme uses ER-MACRO-TRANSFORMER.  On the
-;;; other hand, (DEFINE-SYNTAX TRANSFORMER ER-MACRO-TRANSFORMER) would
-;;; work perfectly well anyway.
-
-(define (macrology/er-macro-transformer)
+(define (macrology/non-standard-macro-transformers)
   (make-extended-classifier-macrology
    (lambda (define-classifier)
 
@@ -706,31 +693,41 @@
                 (name-list? (cdr object)))
            (null? object)))
 
-     (define-classifier '(ER-MACRO-TRANSFORMER EXPRESSION ? (* NAME))
-       (lambda (form environment history)
-         (let ((finish
-                (lambda (procedure auxiliary-names)
-                  (values (make-keyword form
-                                        (make-transformer environment
-                                                          auxiliary-names
-                                                          procedure
-                                                          form))
-                          history)))
-               (expression (cadr form))
-               (auxiliary-names (if (pair? (cddr form)) (caddr form) #f)))
-           (let ((mumble (meta-evaluate expression environment)))
-             (cond ((procedure? mumble)
-                    (finish mumble auxiliary-names))
-                   ((and (pair? mumble)
-                         (procedure? (car mumble))
-                         (name-list? (cdr mumble)))
-                    (if auxiliary-names
-                        (classify-error "Multiple auxiliary name lists:"
-                                        history
-                                        (cdr mumble)
-                                        auxiliary-names)
-                        (finish (car mumble) (cdr mumble))))
-                   (else
-                    (classify-error "Invalid transformer procedure:"
-                                    history
-                                    mumble))))))))))
+     (define (define-transformer-classifier name wrapper)
+       (define-classifier `(,name EXPRESSION ? (* NAME))
+         (lambda (form environment history)
+           (let ((finish
+                  (lambda (procedure auxiliary-names)
+                    (values (make-keyword form
+                                          (make-transformer environment
+                                                            auxiliary-names
+                                                            (wrapper procedure)
+                                                            form))
+                            history)))
+                 (expression (cadr form))
+                 (auxiliary-names (if (pair? (cddr form)) (caddr form) #f)))
+             (let ((mumble (meta-evaluate expression environment)))
+               (cond ((procedure? mumble)
+                      (finish mumble auxiliary-names))
+                     ((and (pair? mumble)
+                           (procedure? (car mumble))
+                           (name-list? (cdr mumble)))
+                      (if auxiliary-names
+                          (classify-error "Multiple auxiliary name lists:"
+                                          history
+                                          (cdr mumble)
+                                          auxiliary-names)
+                          (finish (car mumble) (cdr mumble))))
+                     (else
+                      (classify-error "Invalid transformer procedure:"
+                                      history
+                                      mumble))))))))
+
+     (define-transformer-classifier 'ER-MACRO-TRANSFORMER
+       make-er-macro-transformer-procedure)
+
+     (define-transformer-classifier 'SC-MACRO-TRANSFORMER
+       make-sc-macro-transformer-procedure)
+
+     (define-transformer-classifier 'RSC-MACRO-TRANSFORMER
+       make-rsc-macro-transformer-procedure))))

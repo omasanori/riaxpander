@@ -6,34 +6,48 @@
 ;;; This code is written by Taylor R. Campbell and placed in the Public
 ;;; Domain.  All warranties are disclaimed.
 
-;;; I am slightly apprehensive about this syntactic filtration,
-;;; because it is essentially non-tail-recursion.
-
 (define (apply-transformer name transformer form usage-environment)
-  (let ((closing-environment (transformer/environment transformer))
-        (token (make-alias-token)))
-    (let ((filtered-environment
-           (syntactic-filter usage-environment token closing-environment)))
-      (values ((transformer/procedure transformer)
-               form
-               (make-alias-generator token closing-environment name)
-               (make-name-comparator filtered-environment))
-              filtered-environment))))
+  ((transformer/procedure transformer)
+   form
+   usage-environment
+   (syntactic-transformer-extend (transformer/environment transformer) name)))
 
-(define (make-alias-generator token environment introducer)
-  (let ((cache '()))
-    (lambda (name)
-      (cdr
-       (or (assq name cache)
-           (let ((entry
-                  (cons name
-                        (make-alias name token environment introducer))))
-             (set! cache (cons entry cache))
-             entry))))))
+(define (make-rsc-macro-transformer-procedure procedure)
+  (lambda (form usage-environment closing-environment)
+    ;; We need not close this in the usage environment, because the
+    ;; classifier will classify it there anyway.  (This is a mildly
+    ;; leaky abstraction.)
+    usage-environment                   ;ignore
+    (procedure form closing-environment)))
 
-(define (make-name-comparator environment)
+(define make-rsc-macro-transformer-macrology
+  (transformer-macrology-maker make-rsc-macro-transformer-procedure))
+
+(define (make-sc-macro-transformer-procedure procedure)
+  (lambda (form usage-environment closing-environment)
+    (close-syntax (procedure form usage-environment)
+                  closing-environment)))
+
+(define make-sc-macro-transformer-macrology
+  (transformer-macrology-maker make-sc-macro-transformer-procedure))
+
+(define (make-er-macro-transformer-procedure procedure)
+  (lambda (form usage-environment closing-environment)
+    (procedure form
+               (make-alias-generator closing-environment)
+               (make-name-comparator usage-environment))))
+
+(define make-er-macro-transformer-macrology
+  (transformer-macrology-maker make-er-macro-transformer-procedure))
+
+(define (make-alias-generator closing-environment)
+  (lambda (name)
+    (syntactic-alias closing-environment name)))
+
+(define (make-name-comparator usage-environment)
   (lambda (name-a name-b)
     (or (eq? name-a name-b)
         (and (name? name-a)
              (name? name-b)
-             (name=? environment name-a environment name-b)))))
+             (name=? usage-environment name-a
+                     usage-environment name-b)))))
