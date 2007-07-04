@@ -12,7 +12,7 @@
              specifiers))
  '(
    ("history")
-   ("name")
+   ("closure")
    ("denotation")
    ("environment" "name" "denotation")
    ("transform" "name" "denotation" "environment")

@@ -69,7 +69,7 @@
     (for-each load
               '(
                 "history"
-                "name"
+                "closure"
                 "denotation"
                 "environment"
                 "transform"
@@ -83,10 +83,13 @@
 
 ;;; Make things print more nicely.
 
-(set-record-type-unparser-method! <alias>
-  (simple-unparser-method 'ALIAS
-    (lambda (alias)
-      (list (name->symbol alias)))))
+(set-record-type-unparser-method! <syntactic-closure>
+  (simple-unparser-method 'SYNTACTIC-CLOSURE
+    (lambda (closure)
+      (cons* (syntactic-closure/form closure)
+             (syntactic-closure/free-names closure)
+             (disclose-syntactic-environment
+              (syntactic-closure/environment closure))))))
 
 (set-record-type-unparser-method! <variable>
   (simple-unparser-method 'VARIABLE
