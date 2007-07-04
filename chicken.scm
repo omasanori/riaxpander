@@ -12,15 +12,21 @@
 
 (declare
   (export
-    exrename:install
-    exrename:expand
-    exrename:expand-toplevel
+    riaxpander:install
+    riaxpander:expand
+    riaxpander:expand-toplevel
     ##sys#compiler-toplevel-macroexpand-hook
     ##sys#interpreter-toplevel-macroexpand-hook
     macroexpand
     name?
-    name/original-symbol
     name->symbol
+    symbol->name
+    datum->syntax
+    syntax->datum
+    make-syntactic-closure
+    make-syntactic-closures
+    close-syntax
+    close-syntax*
     ;++ more exports
     ))
 
@@ -32,7 +38,7 @@
 
 (use srfi-1)                            ;list-lib
 (include "history")
-(include "name")
+(include "closure")
 (include "denotation")
 (include "environment")
 (include "transform")
@@ -41,8 +47,8 @@
 (include "standard")
 (include "synrules")
 
-(define (exrename:expand form environment)
-  (set! *alias-uid* 0)
+(define (riaxpander:expand form environment)
+  (set! *location-uid* 0)
   ((lambda (results)
      (if (and (pair? results)
               (null? (cdr results)))
@@ -59,34 +65,51 @@
                           environment
                           (make-top-level-history forms environment))))))
 
-(define (exrename:expand-toplevel form)
-  (exrename:expand form
-                   (or exrename:top-level-environment
-                       (make-chicken-environment))))
+(define (riaxpander:expand-toplevel form)
+  (riaxpander:expand form
+                     (or riaxpander:top-level-environment
+                         (make-chicken-environment))))
 
-(define exrename:top-level-environment #f)
+(define riaxpander:top-level-environment #f)
 
-(define (exrename:install)
-  (set! exrename:top-level-environment (make-chicken-environment))
-  (set! ##sys#compiler-toplevel-macroexpand-hook exrename:expand-toplevel)
-  (set! ##sys#interpreter-toplevel-macroexpand-hook exrename:expand-toplevel)
+(define (riaxpander:install)
+  ;++ Perhaps this should preserve the original values of the hooks.
+  (set! riaxpander:top-level-environment (make-chicken-environment))
+  (set! ##sys#compiler-toplevel-macroexpand-hook riaxpander:expand-toplevel)
+  (set! ##sys#interpreter-toplevel-macroexpand-hook riaxpander:expand-toplevel)
   (set! macroexpand
         (lambda (expression . macro-environment)
           macro-environment             ;ignore -- Chicken unhygienic macros
-          (exrename:expand-toplevel expression))))
+          (riaxpander:expand-toplevel expression))))
 
 (define (chicken/meta-evaluate expression environment)
   ((##sys#eval-handler)
-   (exrename:expand expression environment)))
+   (riaxpander:expand expression environment)))
 
-(define (chicken/reduce-name name environment)
-  (let loop ((name name))
-    (if (alias? name)
-        (if (name=? environment name
-                    exrename:top-level-environment (alias/name name))
-            (loop (alias/name name))
-            (name->symbol name))
-        name)))
+(define (chicken/reduce-reference name location reference environment)
+  (cond ((number? location)
+         (string->symbol
+          (string-append (symbol->string (name->symbol name))
+                         "#"
+                         (number->string location #d10))))
+        ((name? location)
+         ;** Note that this strips the information necessary to
+         ;** resolve hygienic module references later.
+         (name->symbol location))
+        ((not location)
+         (name->symbol reference))
+        (else
+         (error "Bogus location for variable reference:"
+                name location reference environment))))
+
+(define *location-uid* 0)
+
+(define (chicken/allocate-location environment name)
+  (if (not (syntactic-environment/parent environment))
+      name
+      (let ((uid *location-uid*))
+        (set! *location-uid* (+ uid 1))
+        uid)))
 
 (define (print-with-components type components output-port)
   ;; For some reason, the second argument to WRITE-STRING in Chicken is
@@ -112,14 +135,16 @@
                                 component-accessors)
                            output-port)))
 
-(define-record-printer <alias>
-  (printer-with-components 'ALIAS
-                           alias/name
-                           alias/uid))
+(define-record-printer <syntactic-closure>
+  (printer-with-components 'SYNTACTIC-CLOSURE
+                           syntactic-closure/form
+                           syntactic-closure/free-names
+                           (lambda (closure)
+                             (disclose-syntactic-environment
+                              (syntactic-closure/environment closure)))))
 
 (define-record-printer <classifier>
-  (printer-with-components 'CLASSIFIER
-                           classifier/name))
+  (printer-with-components 'CLASSIFIER classifier/name))
 
 (define-record-printer <transformer>
   (printer-with-components 'TRANSFORMER))
@@ -130,29 +155,24 @@
                            variable/location))
 
 (define-record-printer <keyword>
-  (printer-with-components 'KEYWORD
-                           keyword/name))
+  (printer-with-components 'KEYWORD keyword/name))
 
 ;++ Should these actually compile the data?  The output might be more readable.
 
 (define-record-printer <expression>
-  (printer-with-components 'EXPRESSION
-                           expression/compiler))
+  (printer-with-components 'EXPRESSION expression/compiler))
 
 (define-record-printer <location>
-  (printer-with-components 'LOCATION
-                           location/expression-compiler))
+  (printer-with-components 'LOCATION location/expression-compiler))
 
 (define-record-printer <sequence>
-  (printer-with-components 'SEQUENCE
-                           sequence/forms))
+  (printer-with-components 'SEQUENCE sequence/forms))
 
 (define-record-printer <definition>
   (printer-with-components 'DEFINITION))
 
 (define-record-printer <binding>
-  (printer-with-components 'BINDING
-                           binding/variable))
+  (printer-with-components 'BINDING binding/variable))
 
 (define (make-chicken-environment)
   (let ((environment
@@ -187,9 +207,9 @@
      (lambda (environment name)         ;lookup
        (cond ((assq name (global-bindings environment))
               => cdr)
-             ((alias? name)
-              (syntactic-lookup (alias/environment name)
-                                (alias/name name)))
+             ((syntactic-closure? name)
+              (syntactic-lookup (syntactic-closure/environment name)
+                                (syntactic-closure/form name)))
              (else #f)))
      (lambda (environment name denotation) ;bind!
        (set-global-bindings! environment
@@ -216,6 +236,7 @@
           ((eq? key combination-classifier) chicken/classify-combination)
           ((eq? key datum-classifier) chicken/classify-datum)
           ((eq? key self-evaluating?) chicken/self-evaluating?)
+          ((eq? key location-allocator) chicken/allocate-location)
           ((eq? key meta-evaluator) chicken/meta-evaluate)
           (else #f))))
 
@@ -247,13 +268,13 @@
 
 (define (chicken-extensions-macrology)
   (compose-macrologies
-   (macrology/er-macro-transformer)
+   (macrology/non-standard-macro-transformers)
    (macrology/syntax-quote 'SYNTAX-QUOTE chicken/compile-quotation)
    (make-extended-classifier-macrology
     (lambda (define-classifier)
       (define-classifier '(DECLARE + (NAME * DATUM))
         (lambda (form environment history)
-          (values (make-declaration-definition cdr-selector
+          (values (make-declaration-definition cdr-selctor
                                                (cdr form)
                                                environment
                                                history)
@@ -290,19 +311,17 @@
       (eof-object? datum)))
 
 (define (chicken/classify-variable name location reference environment history)
-  name reference                        ;ignore
-  (chicken/make-variable-location location environment history))
+  (values
+   (make-location
+    (lambda () (chicken/reduce-reference name location reference environment))
+    (lambda (expression assignment-history)
+      assignment-history                ;ignore
+      `(SET! ,(chicken/reduce-reference name location reference environment)
+             ,(chicken/compile-expression expression))))
+   history))
 
-(define (chicken/classify-free-variable name environment history)
-  (chicken/make-variable-location name environment history))
-
-(define (chicken/make-variable-location name environment history)
-  (values (make-location (lambda () (chicken/reduce-name name environment))
-                         (lambda (expression assignment-history)
-                           assignment-history ;ignore
-                           `(SET! ,(chicken/reduce-name name environment)
-                                  ,(chicken/compile-expression expression))))
-          history))
+(define (chicken/classify-free-variable reference environment history)
+  (chicken/classify-variable #f #f reference environment history))
 
 (define (chicken/classify-combination operator operator-history
                                       selector forms environment history)
@@ -355,8 +374,10 @@
   history                               ;ignore
   `(LAMBDA ,(chicken/%map-lambda-bvl bvl
               (lambda (variable)
-                (chicken/reduce-name (variable/location variable)
-                                     environment)))
+                (chicken/reduce-reference (variable/name variable)
+                                          (variable/location variable)
+                                          #f
+                                          environment)))
      ,@(chicken/compile-lambda-body body)))
 
 (define (chicken/compile-lambda-body body)
@@ -419,8 +440,11 @@
     output-form))
 
 (define (chicken/compile-binding binding)
-  `(DEFINE ,(chicken/reduce-name (variable/location (binding/variable binding))
-                                 (binding/environment binding))
+  `(DEFINE ,(let ((variable (binding/variable binding)))
+              (chicken/reduce-reference (variable/name variable)
+                                        (variable/location variable)
+                                        #f
+                                        (binding/environment binding)))
      ,(receive (expression history) ((binding/classifier binding))
         history                         ;ignore
         (chicken/compile-expression expression))))
