@@ -263,17 +263,17 @@
               (lambda ()
                 (classify-subform selector form environment history))))
     (receive (classification history) (classifier)
-        (cond ((sequence? classification)
-               (classify/sequence scan-top-level classification))
-              ((definition? classification)
-               (scan-definition classification environment))
-              ((expression? classification)
-               (scan-expression classification environment))
-              (else
-               (loop (lambda ()
-                       (classify-error "Invalid top-level form:"
-                                       history
-                                       form))))))))
+      (cond ((sequence? classification)
+             (classify/sequence scan-top-level classification))
+            ((definition? classification)
+             (scan-definition classification environment))
+            ((expression? classification)
+             (scan-expression classification environment))
+            (else
+             (loop (lambda ()
+                     (classify-error "Invalid top-level form:"
+                                     history
+                                     form))))))))
 
 ;;;;; Homogeneous Sequences
 
