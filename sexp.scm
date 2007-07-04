@@ -10,6 +10,7 @@
   (sexp/expand* (list form) environment))
 
 (define (sexp/expand* forms environment)
+  (set! *location-uid* 0)
   ((lambda (results)
      (if (and (pair? results)
               (null? (cdr results)))
@@ -30,21 +31,30 @@
   ;; therefore unsuitable as an argument to EVAL.
   (eval (sexp/expand expression environment) (interaction-environment)))
 
-(define (sexp/reduce-name name environment)
-  ;++ This is a kludge.  The effect is to generate clean names from
-  ;++ aliases for names that are bound in top-level environments, and
-  ;++ to leave local variables ugly.
-  (let ((environment*
-         (let loop ((environment environment))
-           (cond ((syntactic-environment/parent environment)
-                  => loop)
-                 (else environment)))))
-    (let loop ((name name))
-      (if (alias? name)
-          (if (name=? environment name environment* (alias/name name))
-              (loop (alias/name name))
-              (name->symbol name))
-          name))))
+(define (sexp/reduce-reference name location reference environment)
+  (cond ((number? location)
+         (string->symbol
+          (string-append (symbol->string (name->symbol name))
+                         "#"
+                         (number->string location #d10))))
+        ((name? location)
+         ;** Note that this strips the information necessary to
+         ;** resolve hygienic module references later.
+         (name->symbol location))
+        ((not location)
+         (name->symbol reference))
+        (else
+         (error "Bogus location for variable reference:"
+                name location reference environment))))
+
+(define *location-uid* 0)
+
+(define (sexp/allocate-location environment name)
+  (if (not (syntactic-environment/parent environment))
+      name
+      (let ((uid *location-uid*))
+        (set! *location-uid* (+ uid 1))
+        uid)))
 
 ;;;; S-Expression Syntactic Environment
 
@@ -79,9 +89,9 @@
      (lambda (environment name)         ;lookup
        (cond ((assq name (global-bindings environment))
               => cdr)
-             ((alias? name)
-              (syntactic-lookup (alias/environment name)
-                                (alias/name name)))
+             ((syntactic-closure? name)
+              (syntactic-lookup (syntactic-closure/environment name)
+                                (syntactic-closure/form name)))
              (else #f)))
      (lambda (environment name denotation) ;bind!
        (set-global-bindings! environment
@@ -108,6 +118,7 @@
           ((eq? key datum-classifier) sexp/classify-datum)
           ((eq? key self-evaluating?) sexp/self-evaluating?)
           ((eq? key combination-classifier) sexp/classify-combination)
+          ((eq? key location-allocator) sexp/allocate-location)
           ((eq? key meta-evaluator) sexp/meta-evaluate)
           (else #f))))
 
@@ -126,19 +137,17 @@
       (string? datum)))
 
 (define (sexp/classify-variable name location reference environment history)
-  name reference                        ;ignore
-  (sexp/make-variable-location location environment history))
+  (values
+   (make-location
+    (lambda () (sexp/reduce-reference name location reference environment))
+    (lambda (expression assignment-history)
+      assignment-history                ;ignore
+      `(SET! ,(sexp/reduce-reference name location reference environment)
+             ,(sexp/compile-expression expression))))
+   history))
 
-(define (sexp/classify-free-variable name environment history)
-  (sexp/make-variable-location name environment history))
-
-(define (sexp/make-variable-location name environment history)
-  (values (make-location (lambda () (sexp/reduce-name name environment))
-                         (lambda (expression assignment-history)
-                           assignment-history ;ignore
-                           `(SET! ,(sexp/reduce-name name environment)
-                                  ,(sexp/compile-expression expression))))
-          history))
+(define (sexp/classify-free-variable reference environment history)
+  (sexp/classify-variable #f #f reference environment history))
 
 (define (sexp/classify-combination operator operator-history
                                    selector forms environment history)
@@ -180,7 +189,10 @@
   history                               ;ignore
   `(LAMBDA ,(sexp/%map-lambda-bvl bvl
               (lambda (variable)
-                (sexp/reduce-name (variable/location variable) environment)))
+                (sexp/reduce-reference (variable/name variable)
+                                       (variable/location variable)
+                                       #f
+                                       environment)))
      ,@(sexp/compile-lambda-body body)))
 
 (define (sexp/compile-lambda-body body)
@@ -240,8 +252,11 @@
   `(,(sexp/compile-expression operator) ,@(sexp/compile-expressions operands)))
 
 (define (sexp/compile-binding binding)
-  `(DEFINE ,(sexp/reduce-name (variable/location (binding/variable binding))
-                              (binding/environment binding))
+  `(DEFINE ,(let ((variable (binding/variable binding)))
+              (sexp/reduce-reference (variable/name variable)
+                                     (variable/location variable)
+                                     #f
+                                     (binding/environment binding)))
      ,(receive (expression history) ((binding/classifier binding))
         history                         ;ignore
         (sexp/compile-expression expression))))
