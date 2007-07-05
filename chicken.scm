@@ -86,21 +86,23 @@
   ((##sys#eval-handler)
    (riaxpander:expand expression environment)))
 
-(define (chicken/reduce-reference name location reference environment)
-  (cond ((number? location)
-         (string->symbol
-          (string-append (symbol->string (name->symbol name))
-                         "#"
-                         (number->string location))))
-        ((name? location)
-         ;** Note that this strips the information necessary to
-         ;** resolve hygienic module references later.
-         (name->symbol location))
-        ((not location)
-         (name->symbol reference))
-        (else
-         (error "Bogus location for variable reference:"
-                name location reference environment))))
+(define (chicken/compile-reference variable reference environment)
+  (if (not variable)
+      (name->symbol reference)
+      (let ((name (variable/name variable))
+            (location (variable/location variable)))
+        (cond ((number? location)
+               (string->symbol
+                (string-append (symbol->string (name->symbol name))
+                               "#"
+                               (number->string location))))
+              ((name? location)
+               ;** Note that this strips the information necessary to
+               ;** resolve hygienic module references later.
+               (name->symbol location))
+              (else
+               (error "Variable has bogus location:"
+                      variable reference environment))))))
 
 (define *location-uid* 0)
 
@@ -310,18 +312,18 @@
       (string? datum)
       (eof-object? datum)))
 
-(define (chicken/classify-variable name location reference environment history)
+(define (chicken/classify-variable variable reference environment history)
   (values
    (make-location
-    (lambda () (chicken/reduce-reference name location reference environment))
+    (lambda () (chicken/compile-reference variable reference environment))
     (lambda (expression assignment-history)
       assignment-history                ;ignore
-      `(SET! ,(chicken/reduce-reference name location reference environment)
+      `(SET! ,(chicken/compile-reference variable reference environment)
              ,(chicken/compile-expression expression))))
    history))
 
 (define (chicken/classify-free-variable reference environment history)
-  (chicken/classify-variable #f #f reference environment history))
+  (chicken/classify-variable #f reference environment history))
 
 (define (chicken/classify-combination operator operator-history
                                       selector forms environment history)
@@ -374,10 +376,7 @@
   history                               ;ignore
   `(LAMBDA ,(chicken/%map-lambda-bvl bvl
               (lambda (variable)
-                (chicken/reduce-reference (variable/name variable)
-                                          (variable/location variable)
-                                          #f
-                                          environment)))
+                (chicken/compile-reference variable #f environment)))
      ,@(chicken/compile-lambda-body body)))
 
 (define (chicken/compile-lambda-body body)
@@ -440,11 +439,9 @@
     output-form))
 
 (define (chicken/compile-binding binding)
-  `(DEFINE ,(let ((variable (binding/variable binding)))
-              (chicken/reduce-reference (variable/name variable)
-                                        (variable/location variable)
-                                        #f
-                                        (binding/environment binding)))
+  `(DEFINE ,(chicken/compile-reference (binding/variable binding)
+                                       #f
+                                       (binding/environment binding))
      ,(receive (expression history) ((binding/classifier binding))
         history                         ;ignore
         (chicken/compile-expression expression))))
