@@ -31,21 +31,23 @@
   ;; therefore unsuitable as an argument to EVAL.
   (eval (sexp/expand expression environment) (interaction-environment)))
 
-(define (sexp/reduce-reference name location reference environment)
-  (cond ((number? location)
-         (string->symbol
-          (string-append (symbol->string (name->symbol name))
-                         "#"
-                         (number->string location #d10))))
-        ((name? location)
-         ;** Note that this strips the information necessary to
-         ;** resolve hygienic module references later.
-         (name->symbol location))
-        ((not location)
-         (name->symbol reference))
-        (else
-         (error "Bogus location for variable reference:"
-                name location reference environment))))
+(define (sexp/compile-reference variable reference environment)
+  (if (not variable)
+      (name->symbol reference)
+      (let ((name (variable/name variable))
+            (location (variable/location variable)))
+        (cond ((number? location)
+               (string->symbol
+                (string-append (symbol->string (name->symbol name))
+                               "#"
+                               (number->string location #d10))))
+              ((name? location)
+               ;** Note that this strips the information necessary to
+               ;** resolve hygienic module references later.
+               (name->symbol location))
+              (else
+               (error "Variable has bogus location:"
+                      variable reference environment))))))
 
 (define *location-uid* 0)
 
@@ -139,18 +141,18 @@
       (number? datum)
       (string? datum)))
 
-(define (sexp/classify-variable name location reference environment history)
+(define (sexp/classify-variable variable reference environment history)
   (values
    (make-location
-    (lambda () (sexp/reduce-reference name location reference environment))
+    (lambda () (sexp/compile-reference variable reference environment))
     (lambda (expression assignment-history)
       assignment-history                ;ignore
-      `(SET! ,(sexp/reduce-reference name location reference environment)
+      `(SET! ,(sexp/compile-reference variable reference environment)
              ,(sexp/compile-expression expression))))
    history))
 
 (define (sexp/classify-free-variable reference environment history)
-  (sexp/classify-variable #f #f reference environment history))
+  (sexp/classify-variable #f reference environment history))
 
 (define (sexp/classify-combination operator operator-history
                                    selector forms environment history)
@@ -192,10 +194,7 @@
   history                               ;ignore
   `(LAMBDA ,(sexp/%map-lambda-bvl bvl
               (lambda (variable)
-                (sexp/reduce-reference (variable/name variable)
-                                       (variable/location variable)
-                                       #f
-                                       environment)))
+                (sexp/compile-reference variable #f environment)))
      ,@(sexp/compile-lambda-body body)))
 
 (define (sexp/compile-lambda-body body)
@@ -255,11 +254,9 @@
   `(,(sexp/compile-expression operator) ,@(sexp/compile-expressions operands)))
 
 (define (sexp/compile-binding binding)
-  `(DEFINE ,(let ((variable (binding/variable binding)))
-              (sexp/reduce-reference (variable/name variable)
-                                     (variable/location variable)
-                                     #f
-                                     (binding/environment binding)))
+  `(DEFINE ,(sexp/compile-reference (binding/variable binding)
+                                    #f
+                                    (binding/environment binding))
      ,(receive (expression history) ((binding/classifier binding))
         history                         ;ignore
         (sexp/compile-expression expression))))
