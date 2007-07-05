@@ -38,12 +38,10 @@
   (cond ((syntactic-lookup environment name)
          => (lambda (denotation)
               (cond ((variable? denotation)
-                     ((variable-classifier environment)
-                      (variable/name denotation)
-                      (variable/location denotation)
-                      name
-                      environment
-                      history))
+                     ((variable-classifier environment) denotation
+                                                        name
+                                                        environment
+                                                        history))
                     ((or (classifier? denotation)
                          (transformer? denotation))
                      (values (make-keyword name denotation) history))
