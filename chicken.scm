@@ -19,6 +19,7 @@
     ##sys#interpreter-toplevel-macroexpand-hook
     macroexpand
     name?
+    name=?
     name->symbol
     symbol->name
     datum->syntax
