@@ -322,7 +322,7 @@
 ;;; body consist only of expressions.  This does, however, implement
 ;;; R6RS semantics, and, much as I am opposed to R6RS, I prefer its
 ;;; LET-SYNTAX semantics.  If one wishes to introduce a new scope, one
-;;; can write the LET explicitly.  Implementing R5RS sematics is more
+;;; can write the LET explicitly.  Implementing R5RS semantics is more
 ;;; trouble than it's worth to do correctly.
 
 (define (macrology/standard-syntactic-binding)
