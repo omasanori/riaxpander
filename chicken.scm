@@ -10,6 +10,11 @@
 ;;; This system requires that Chicken be set into case-insensitive
 ;;; mode.  To load the system, simply (compile and) load this file.
 
+(eval-when (compile load eval)
+  (if (not (eq? (read (open-input-string "FOO"))
+                (read (open-input-string "foo"))))
+      (error "Please run Chicken in standards-compliant mode.")))
+
 (declare
   (export
     riaxpander:install
