@@ -542,7 +542,7 @@
                                 (consumer (cadddr clause)))
                             `(,(rename 'LET) ((,(rename 'T) ,producer))
                                (,(rename 'IF)
-                                   (,(rename APPLY) ,tester ,(rename 'T))
+                                   (,(rename 'APPLY) ,tester ,(rename 'T))
                                  (,(rename 'APPLY) ,consumer ,(rename 'T))
                                  ,@(maybe-more)))))
                          (else
