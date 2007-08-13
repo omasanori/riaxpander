@@ -525,10 +525,10 @@
                          ((or-clause? clause rename compare)
                           (let ((expression (car clause)))
                             (if (more?)
+                                `(,(rename 'OR) ,expression ,(more))
                                 ;; More pedantic tricks.
                                 `(,(rename 'IF) #T
-                                   ,expression)
-                                `(,(rename 'OR) ,expression ,(more)))))
+                                   ,expression))))
                          ((=>-clause? clause rename compare)
                           (let ((producer (car clause))
                                 (consumer (caddr clause)))
