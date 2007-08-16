@@ -65,10 +65,16 @@
   (define %eq? (r 'eq?))
   (define %equal? (r 'equal?))
   (define %input (r 'input))
+  (define %l (r 'l))
   (define %lambda (r 'lambda))
   (define %let (r 'let))
   (define %let* (r 'let*))
+  (define %list? (r 'list?))
+  (define %list (r 'list))
+  (define %loop (r 'loop))
   (define %map (r 'map))
+  (define %null? (r 'null?))
+  (define %or (r 'or))
   (define %pair? (r 'pair?))
   (define %quote (r 'quote))
   (define %syntax-quote (r 'syntax-quote))
@@ -117,14 +123,13 @@
 	   `((,%equal? ,input ',pattern)))))
 
   (define (process-segment-match input pattern)
-    (let ((conjuncts (process-match '(car l) pattern)))
+    (let ((conjuncts (process-match `(,%car ,%l) pattern)))
       (if (null? conjuncts)
-	  `((list? ,input))			;+++
-	  `((let loop ((l ,input))
-	      (or (null? l)
-		  (and (pair? l)
-		       ,@conjuncts
-		       (loop (cdr l)))))))))
+	  `((,%list? ,input))		;+++
+	  `((,%let ,%loop ((,%l ,input))
+	      (,%or (,%null? ,%l)
+		    (,%and (,%pair? ,%l)
+			   (,%loop (,%cdr ,%l)))))))))
 
   ; Generate code to take apart the input expression
   ; This is pretty bad, but it seems to work (can't say why).
