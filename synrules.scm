@@ -101,7 +101,7 @@
 
   (define (process-match input pattern)
     (cond ((name? pattern)
-	   (if (member pattern subkeywords)
+	   (if (memq pattern subkeywords)
 	       `((,%compare ,input (,%rename (,%syntax-quote ,pattern))))
 	       `()))
 	  ((segment-pattern? pattern)
@@ -168,7 +168,10 @@
 		 (let* ((x (process-template (car template)
 					     seg-dim
 					     env))
-			(gen (if (equal? (list x) vars)
+			(gen (if (and (pair? vars)
+				      (null? (cdr vars))
+				      (name? x)
+				      (eq? x (car vars)))
 				 x	;+++
 				 `(,%map (,%lambda ,vars ,x)
 					 ,@vars)))
