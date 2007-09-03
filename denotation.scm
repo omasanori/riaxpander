@@ -30,5 +30,5 @@
   (or (eq? denotation-a denotation-b)
       (and (variable? denotation-a)
            (variable? denotation-b)
-           (eq? (variable/location denotation-a)
-                (variable/location denotation-b)))))
+           (eqv? (variable/location denotation-a)
+                 (variable/location denotation-b)))))
