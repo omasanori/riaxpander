@@ -10,20 +10,26 @@
   (sexp/expand* (list form) environment))
 
 (define (sexp/expand* forms environment)
-  (set! *location-uid* 0)
-  ((lambda (results)
-     (if (and (pair? results)
-              (null? (cdr results)))
-         (car results)
-         `(BEGIN ,@results)))
-   (map (lambda (item)
-          (cond ((binding? item) (sexp/compile-binding item))
-                ((expression? item) (sexp/compile-expression item))
-                (else (error "Invalid item in output:" item))))
-        (scan-top-level identity-selector
-                        forms
-                        environment
-                        (make-top-level-history forms environment)))))
+  ((lambda (body)                       ;++ Use a proper fluid cell.
+     (let ((uid *location-uid*))
+       (set! *location-uid* 0)
+       (let ((value (body)))
+         (set! *location-uid* uid)
+         value)))
+   (lambda ()
+     ((lambda (results)
+        (if (and (pair? results)
+                 (null? (cdr results)))
+            (car results)
+            `(BEGIN ,@results)))
+      (map (lambda (item)
+             (cond ((binding? item) (sexp/compile-binding item))
+                   ((expression? item) (sexp/compile-expression item))
+                   (else (error "Invalid item in output:" item))))
+           (scan-top-level identity-selector
+                           forms
+                           environment
+                           (make-top-level-history forms environment)))))))
 
 (define (sexp/meta-evaluate expression environment)
   ;; ENVIRONMENT is a syntactic environment, not an R5RS environment
