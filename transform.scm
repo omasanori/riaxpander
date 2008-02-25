@@ -10,7 +10,9 @@
   ((transformer/procedure transformer)
    form
    usage-environment
-   (syntactic-transformer-extend (transformer/environment transformer) name)))
+   (syntactic-transformer-extend (transformer/environment transformer)
+                                 name
+                                 usage-environment)))
 
 (define (make-rsc-macro-transformer-procedure procedure)
   (lambda (form usage-environment closing-environment)

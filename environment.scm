@@ -307,11 +307,29 @@
 ;;; presence of hygienic macros.  Transformer environments also record
 ;;; a cache for generated aliases.
 
-(define (syntactic-transformer-extend environment transformer-reference)
-  (make-syntactic-environment transformer-syntactic-operations
-                              (syntactic-environment/parameters environment)
-                              environment
-                              (cons '() transformer-reference)))
+(define (syntactic-transformer-extend environment
+                                      transformer-reference
+                                      usage-environment)
+  (make-syntactic-environment
+   transformer-syntactic-operations
+   (syntactic-environment/parameters environment)
+   environment
+   (cons '()
+         (simplify-transformer-reference environment
+                                         transformer-reference
+                                         usage-environment))))
+
+(define (simplify-transformer-reference parent-environment
+                                        transformer-reference
+                                        usage-environment)
+  (let loop ((transformer-reference transformer-reference))
+    (if (not (syntactic-closure? transformer-reference))
+        transformer-reference
+        (let ((form (syntactic-closure/form transformer-reference)))
+          (if (name=? usage-environment form
+                      usage-environment transformer-reference)
+              (loop form)
+              transformer-reference)))))
 
 (define (syntactic-environment/transformer-reference environment)
   (let loop ((environment environment))
@@ -321,6 +339,8 @@
           ((syntactic-environment/parent environment)
            => loop)
           (else #f))))
+
+;;;;; Transformer Environment Syntactic Operations
 
 (define transformer-syntactic-operations
   (let ()
