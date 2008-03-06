@@ -159,6 +159,7 @@
     name=?
     symbol->name
     datum->syntax
+    syntactic-environment/transformer-reference
 
     variable-classifier
     free-variable-classifier
