@@ -245,7 +245,7 @@
        `(EXTENDED ,(map car (local-bindings environment))))
      (lambda (environment procedure)    ;for-each-binding
        (for-each (lambda (binding)
-                   (procedure (car binding) (cdr binding)))
+                   (procedure (car binding) (cdr binding) environment))
                  (local-bindings environment))))))
 
 ;;;; Splicing Environments
@@ -296,7 +296,7 @@
        `(SPLICING ,(map car (local-bindings environment))))
      (lambda (environment procedure)    ;for-each-binding
        (for-each (lambda (binding)
-                   (procedure (car binding) (cdr binding)))
+                   (procedure (car binding) (cdr binding) environment))
                  (local-bindings environment))))))
 
 ;;;; Transformer Environments
@@ -414,5 +414,7 @@
                    (lambda (free-name)
                      (cond ((syntactic-lookup environment free-name)
                             => (lambda (denotation)
-                                 (procedure free-name denotation))))))
+                                 (procedure free-name
+                                            denotation
+                                            environment))))))
                  (free-names environment))))))
