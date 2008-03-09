@@ -1,10 +1,10 @@
 ;;; -*- Mode: Scheme -*-
 
-;;;; Explicit Renaming Macros
+;;;; Riaxpander
 ;;;; MIT Scheme Compile Script
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 ((lambda (specifiers)
    (for-each (lambda (specifier)

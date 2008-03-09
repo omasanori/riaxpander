@@ -1,11 +1,11 @@
 ;;; -*- Mode: Scheme -*-
 
-;;;; Explicit Renaming Macros
+;;;; Riaxpander
 ;;;; MIT Scheme Port
 ;;;; <http://www.gnu.org/software/mit-scheme/>
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 (define condition-type:syntax-error
   (make-condition-type 'SYNTAX-ERROR condition-type:error
