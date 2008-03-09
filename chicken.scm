@@ -58,22 +58,22 @@
 (include "synrules")
 
 (define (riaxpander:expand form environment)
-  (set! *location-uid* 0)
-  ((lambda (results)
-     (if (and (pair? results)
-              (null? (cdr results)))
-         (car results)
-         `(BEGIN ,@results)))
-   (map (lambda (item)
-          (cond ((binding? item) (chicken/compile-binding item))
-                ((declaration? item) (chicken/compile-declaration item))
-                ((expression? item) (chicken/compile-expression item))
-                (else (error "Invalid top-level item:" item))))
-        (let ((forms (list form)))
-          (scan-top-level identity-selector
-                          forms
-                          environment
-                          (make-top-level-history forms environment))))))
+  (parameterize ((current-location-uid 0))
+    ((lambda (results)
+       (if (and (pair? results)
+                (null? (cdr results)))
+           (car results)
+           `(BEGIN ,@results)))
+     (map (lambda (item)
+            (cond ((binding? item) (chicken/compile-binding item))
+                  ((declaration? item) (chicken/compile-declaration item))
+                  ((expression? item) (chicken/compile-expression item))
+                  (else (error "Invalid top-level item:" item))))
+          (let ((forms (list form)))
+            (scan-top-level identity-selector
+                            forms
+                            environment
+                            (make-top-level-history forms environment)))))))
 
 (define (riaxpander:expand-toplevel form)
   (riaxpander:expand form
@@ -114,13 +114,13 @@
                (error "Variable has bogus location:"
                       variable reference environment))))))
 
-(define *location-uid* 0)
+(define current-location-uid (make-parameter 0))
 
 (define (chicken/allocate-location environment name)
   (if (not (syntactic-environment/parent environment))
       name
-      (let ((uid *location-uid*))
-        (set! *location-uid* (+ uid 1))
+      (let ((uid (current-location-uid)))
+        (current-location-uid (+ uid 1))
         uid)))
 
 (define (print-with-components type components output-port)
