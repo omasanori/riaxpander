@@ -138,6 +138,7 @@
     syntactic-environment/parent
     syntactic-environment/data
     set-syntactic-environment/data!
+    syntactic-environment/parameters
 
     <syntactic-operations>
     make-syntactic-operations
