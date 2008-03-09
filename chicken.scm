@@ -33,6 +33,10 @@
     make-syntactic-closures
     close-syntax
     close-syntax*
+    capture-syntactic-environment
+    capture-expansion-history
+    capture-syntax-error-procedure
+    call-with-syntax-error-procedure
     ;++ more exports
     ))
 
