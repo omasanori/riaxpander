@@ -1,11 +1,11 @@
 ;;; -*- Mode: Scheme -*-
 
-;;;; Explicit Renaming Macros
+;;;; Riaxpander
 ;;;; Chicken Port
 ;;;; <http://www.call-with-current-continuation.org/>
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 ;;; This system requires that Chicken be set into case-insensitive
 ;;; mode.  To load the system, simply (compile and) load this file.
