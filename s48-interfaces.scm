@@ -61,8 +61,9 @@
     classify-keyword    classify-subkeyword     classify-subkeywords
     classifier->operator        classifier->form
     transformer->operator       transformer->form
-    call-with-syntactic-environment
-    call-with-syntactic-history
+    capture-syntactic-environment
+    capture-expansion-history
+    capture-syntax-error-procedure
     call-with-syntax-error-procedure
     classify-sequence
     classify/sequence
