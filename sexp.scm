@@ -119,7 +119,7 @@
        '(SEXP))
      (lambda (environment procedure)    ;for-each-binding
        (for-each (lambda (binding)
-                   (procedure (car binding) (cdr binding)))
+                   (procedure (car binding) (cdr binding) environment))
                  (global-bindings environment))))))
 
 (define sexp/syntactic-parameters
