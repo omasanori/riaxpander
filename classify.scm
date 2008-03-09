@@ -193,19 +193,31 @@
 (define (transformer->form environment auxiliary-names procedure)
   `(,(transformer->operator environment auxiliary-names procedure)))
 
-(define (call-with-syntactic-environment receiver)
+(define (capture-syntactic-environment receiver)
   (classifier->form
    (lambda (form environment history)
      form                               ;ignore
      (classify-reduction (receiver environment) environment history))))
 
-(define (call-with-syntactic-history receiver)
+(define (capture-expansion-history receiver)
   (classifier->form
    (lambda (form environment history)
      form                               ;ignore
      (classify-reduction (receiver history) environment history))))
 
+;;; These names are backwards, but this is compatible with MIT Scheme.
+
 (define (call-with-syntax-error-procedure receiver)
+  (capture-expansion-history
+   (lambda (history)
+     (receiver
+      (lambda (message . irritants)
+        (apply syntax-error message history
+               (and history
+                    (reduction/form (history/current-reduction history)))
+               irritants))))))
+
+(define (capture-syntax-error-procedure receiver)
   (classifier->form
    (lambda (form environment history)
      form                               ;ignore

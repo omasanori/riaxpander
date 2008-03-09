@@ -559,7 +559,7 @@
        (let ((else-clause? (pattern-predicate '('ELSE + EXPRESSION)))
              (case-clause? (pattern-predicate '((* DATUM) + EXPRESSION))))
          (lambda (form rename compare)
-           (call-with-syntax-error-procedure
+           (capture-syntax-error-procedure
              (lambda (syntax-error)
                `(,(rename 'LET) ((,(rename 'KEY) ,(cadr form)))
                   ,(let recur ((selector cddr-selector)
@@ -639,8 +639,8 @@
                           (cadr template)
                           (qq-nest 'UNQUOTE (cadr template) (- depth 1))))
                      ((unquote-splicing? template rename compare)
-                      ;++ Pass the correct selector here.
-                      (syntax-error "Misplaced ,@ template:" #f template))
+                      ;++ Figure out the selector for a better report.
+                      (syntax-error "Misplaced ,@ template:" template))
                      (else
                       (qq-list template depth qq))))
 
