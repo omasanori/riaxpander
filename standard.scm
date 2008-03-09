@@ -1,10 +1,10 @@
 ;;; -*- Mode: Scheme -*-
 
-;;;; Explicit Renaming Macros
+;;;; Riaxpander
 ;;;; Macrologies for Standard Syntax
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 (define (macrology/standard-derived-syntax)
   (compose-macrologies

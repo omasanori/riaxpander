@@ -1,10 +1,10 @@
 ;;; -*- Mode: Scheme -*-
 
-;;;; Explicit Renaming Macros
-;;;; Form Classification Taxonomy 
+;;;; Riaxpander
+;;;; Form Classification Taxonomy
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 ;;; This file implements the types of possible values returned by CLASSIFY.
 

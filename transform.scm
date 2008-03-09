@@ -1,10 +1,10 @@
 ;;; -*- Mode: Scheme -*-
 
-;;;; Explicit Renaming Macros
+;;;; Riaxpander
 ;;;; Transformer Application
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 (define (apply-transformer name transformer form usage-environment)
   ((transformer/procedure transformer)
