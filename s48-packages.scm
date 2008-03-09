@@ -1,10 +1,10 @@
 ;;; -*- Mode: Scheme; scheme48-package: (config) -*-
 
-;;;; Explicit Renaming Macros
+;;;; Riaxpander
 ;;;; Scheme48 Package Definitions
 
-;;; This code is written by Taylor R. Campbell and placed in the Public
-;;; Domain.  All warranties are disclaimed.
+;;; Copyright (c) 2008, Taylor R. Campbell
+;;; See the LICENCE file for licence terms and warranty disclaimer.
 
 (define-structure syntactic syntactic-interface
   (open scheme
