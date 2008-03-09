@@ -378,11 +378,14 @@
 ;;; closure; they make the free names of syntactic closures work.
 
 (define (syntactic-filter closing-environment free-names free-environment)
-  (make-syntactic-environment
-   filtered-syntactic-operations
-   (syntactic-environment/parameters closing-environment)
-   closing-environment
-   (cons free-environment free-names)))
+  (if (or (not (pair? free-names))
+          (eq? closing-environment free-environment))
+      closing-environment
+      (make-syntactic-environment
+       filtered-syntactic-operations
+       (syntactic-environment/parameters closing-environment)
+       closing-environment
+       (cons free-environment free-names))))
 
 (define filtered-syntactic-operations
   (let ()

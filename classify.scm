@@ -55,17 +55,13 @@
   (let ((form* (syntactic-closure/form form)))
     (if (name? form*)
         (classify-name form environment history)
-        ((lambda (environment)
-           (classify form*
-                     environment
-                     (history/replace-reduction history form* environment)))
-         (let ((free-names (syntactic-closure/free-names form))
-               (closing-environment (syntactic-closure/environment form)))
-           (if (pair? free-names)
-               (syntactic-filter closing-environment
-                                 free-names
-                                 environment)
-               closing-environment))))))
+        (let ((environment*
+               (syntactic-filter (syntactic-closure/environment form)
+                                 (syntactic-closure/free-names form)
+                                 environment)))
+          (classify form*
+                    environment
+                    (history/replace-reduction history form* environment))))))
 
 (define (classify/keyword keyword form environment history)
   (let ((name (keyword/name keyword))
