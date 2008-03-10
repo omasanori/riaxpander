@@ -223,23 +223,23 @@
            (procedure bvl)))))
 
 (define (sexp/guarantee-lambda-bvl bvl history)
-  (let ((lose
-         (lambda ()
-           (receive (bvl history)
-                    (syntax-error "Malformed lambda bound variable list:"
-                                  history
-                                  bvl)
-             (sexp/guarantee-lambda-bvl bvl history)))))
-    (let ((original-bvl bvl))
-      (let loop ((bvl bvl))
-        (cond ((pair? bvl)
-               (if (name? (car bvl))
-                   (loop (cdr bvl))
-                   (lose)))
-              ((or (null? bvl) (name? bvl))
-               original-bvl)
-              (else
-               (lose)))))))
+  (define (lose)
+    (receive (bvl history)
+             (syntax-error "Malformed lambda bound variable list:" history bvl)
+      (sexp/guarantee-lambda-bvl bvl history)))
+  (let ((original-bvl bvl))
+    (let loop ((bvl bvl) (seen '()))
+      (cond ((pair? bvl)
+             (if (and (name? (car bvl))
+                      (not (memq (car bvl) seen)))
+                 (loop (cdr bvl))
+                 (lose)))
+            ((or (null? bvl)
+                 (and (name? bvl)
+                      (not (memq bvl seen))))
+             original-bvl)
+            (else
+             (lose))))))
 
 ;;;;; S-Expression Compilation Utilities
 
