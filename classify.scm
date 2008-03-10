@@ -60,8 +60,8 @@
                                  (syntactic-closure/free-names form)
                                  environment)))
           (classify form*
-                    environment
-                    (history/replace-reduction history form* environment))))))
+                    environment*
+                    (history/replace-reduction history form* environment*))))))
 
 (define (classify/keyword keyword form environment history)
   (let ((name (keyword/name keyword))
