@@ -414,7 +414,8 @@
           ((null? bvl)
            #t)
           (else
-           (name? bvl)))))
+           (and (name? bvl)
+                (not (memq bvl seen)))))))
 
 (define (chicken/%map-lambda-bvl bvl procedure)
   (let recur ((bvl bvl))
