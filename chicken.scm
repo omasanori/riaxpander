@@ -398,7 +398,7 @@
              definitions)
       ,@(map chicken/compile-expression expressions))))
 
-;++ Handle DSSSL-extended BVLs.
+;;; DSSSL extended BVLs should be handled in a macro defined elsewhere.
 
 (define (chicken/map-lambda-bvl bvl history procedure)
   (if (not (chicken/valid-bvl? bvl))
