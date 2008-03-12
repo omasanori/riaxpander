@@ -44,7 +44,9 @@
                                                         history))
                     ((or (classifier? denotation)
                          (transformer? denotation))
-                     (values (make-keyword name denotation) history))
+                     (values (make-keyword (close-syntax name environment)
+                                           denotation)
+                             history))
                     (else
                      (error "Invalid denotation:" denotation
                             name environment history)))))
@@ -66,12 +68,13 @@
 (define (classify/keyword keyword form environment history)
   (let ((name (keyword/name keyword))
         (denotation (keyword/denotation keyword)))
-    (cond ((classifier? denotation)
-           (classify/classifier name denotation form environment history))
-          ((transformer? denotation)
-           (classify/transformer name denotation form environment history))
-          (else
-           (error "Invalid keyword denotation:" denotation keyword)))))
+    (let ((form (cons name (cdr form))))
+      (cond ((classifier? denotation)
+             (classify/classifier name denotation form environment history))
+            ((transformer? denotation)
+             (classify/transformer name denotation form environment history))
+            (else
+             (error "Invalid keyword denotation:" denotation keyword))))))
 
 (define (classify/classifier name classifier form environment history)
   name                                  ;ignore
