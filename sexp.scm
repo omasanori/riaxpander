@@ -232,7 +232,7 @@
       (cond ((pair? bvl)
              (if (and (name? (car bvl))
                       (not (memq (car bvl) seen)))
-                 (loop (cdr bvl))
+                 (loop (cdr bvl) (cons (car bvl) seen))
                  (lose)))
             ((or (null? bvl)
                  (and (name? bvl)
