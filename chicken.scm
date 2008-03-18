@@ -292,22 +292,24 @@
                                                history)
                   history)))))))
 
+(define (chicken/record-source?)
+  (and ##sys#line-number-database #t))
+
 (define (chicken/clobber-source-record input-form output-form)
-  (if (and ##sys#line-number-database input-form)
-      (let ((input-operator (car input-form))
-            (output-operator (car output-form)))
-        (define (original-bucket)
-          (##sys#hash-table-ref ##sys#line-number-database input-operator))
-        (cond ((eq? input-operator output-operator)
-               (cond ((assq input-form (or (original-bucket) '()))
-                      => (lambda (cell)
-                           (set-cdr! cell output-form)))))
-              ((get-line-number input-form)
-               => (lambda (line)
-                    (##sys#hash-table-set!
-                     ##sys#line-number-database
-                     output-operator
-                     (cons (cons output-form line) (original-bucket)))))))))
+  (let ((input-operator (car input-form))
+        (output-operator (car output-form)))
+    (define (original-bucket)
+      (##sys#hash-table-ref ##sys#line-number-database input-operator))
+    (cond ((eq? input-operator output-operator)
+           (cond ((assq input-form (or (original-bucket) '()))
+                  => (lambda (cell)
+                       (set-cdr! cell output-form)))))
+          ((get-line-number input-form)
+           => (lambda (line)
+                (##sys#hash-table-set!
+                 ##sys#line-number-database
+                 output-operator
+                 (cons (cons output-form line) (original-bucket))))))))
 
 (define (chicken/classify-datum datum environment history)
   environment                           ;ignore
@@ -443,10 +445,18 @@
   (map chicken/compile-expression expressions))
 
 (define (chicken/compile-combination operator operands history)
-  (let ((input-form
-         (and history (reduction/form (history/original-reduction history))))
-        (output-form `(,operator ,@operands)))
-    (chicken/clobber-source-record input-form output-form)
+  (let ((output-form `(,operator ,@operands)))
+    (cond ((and (symbol? operator)
+                history
+                (chicken/record-source?)
+                (find (lambda (reduction)
+                        (let ((form (reduction/form reduction)))
+                          (and (pair? form)
+                               (symbol? (car form)))))
+                      (reverse (history/reductions history))))
+           => (lambda (reduction)
+                (chicken/clobber-source-record (reduction/form reduction)
+                                               output-form))))
     output-form))
 
 (define (chicken/compile-binding binding)
