@@ -538,7 +538,7 @@
                                  ,@(maybe-more)))))
                          ((=>*-clause? clause rename compare)
                           (let ((producer (car clause))
-                                (tester (caddr clause))
+                                (tester (cadr clause))
                                 (consumer (cadddr clause)))
                             `(,(rename 'LET) ((,(rename 'T) ,producer))
                                (,(rename 'IF)
