@@ -129,6 +129,7 @@
 	  `((,%let ,%loop ((,%l ,input))
 	      (,%or (,%null? ,%l)
 		    (,%and (,%pair? ,%l)
+			   ,@conjuncts
 			   (,%loop (,%cdr ,%l)))))))))
 
   ; Generate code to take apart the input expression
